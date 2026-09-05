@@ -226,10 +226,20 @@
     .stop-addr{display:none}
     .map-ui{right:12px}
     .map-badge{display:none}
-    .toolbar{gap:5px}
-    .toolbar button{padding:6px 7px;font-size:12.5px}
-    #startDate{width:112px;font-size:12.5px}
-    #mode{width:100px;font-size:12.5px}
+    /* 手機：工具列一行塞完，分享搬到標題列，提示文字收掉 */
+    header{padding:14px 12px 8px}
+    .toolbar{gap:5px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-top:6px}
+    .toolbar::-webkit-scrollbar{display:none}
+    .toolbar button{padding:6px 8px;font-size:12.5px;flex:none}
+    .toolbar #btnShare{display:none}
+    #btnShareTop{display:inline-block !important;font-size:16px;padding:4px 6px}
+    #startDate{width:108px;font-size:12.5px;flex:none}
+    #mode{width:96px;font-size:12.5px;flex:none}
+    .search{margin-top:8px}
+    .search input{padding:8px 10px 8px 34px;font-size:13.5px}
+    .search svg{top:9px}
+    #hint{display:none}
+    #days{padding-top:6px}
   }
 </style>
 </head>
@@ -241,6 +251,7 @@
     <div class="title-row">
       <input id="tripTitle" placeholder="旅程名稱" spellcheck="false">
       <span class="seg"><button id="vMap" class="on">規劃</button><button id="vGo">出發</button></span>
+      <button class="ghost" id="btnShareTop" title="分享" hidden>📤</button>
       <button class="ghost" id="btnMenu" title="更多">⋯</button>
     </div>
     <div class="toolbar">
@@ -1073,6 +1084,7 @@ $('#btnAddDay').addEventListener('click', addDay);
 $('#vMap').addEventListener('click', () => { view = 'map'; render(); setTimeout(() => map && google.maps.event.trigger(map, 'resize'), 50); });
 $('#vGo').addEventListener('click', () => { view = 'go'; $('#days')._scrolled = false; render(); });
 $('#showAll').addEventListener('change', e => { showAll = e.target.checked; drawMarkers(); });
+$('#btnShareTop').addEventListener('click', () => $('#btnShare').click());
 $('#btnShare').addEventListener('click', async () => {
   const url = shareUrl(); $('#shareUrl').value = url; history.replaceState(null, '', url.slice(url.indexOf('#')));
   if (navigator.share && /Mobi|Android/i.test(navigator.userAgent)) { try { await navigator.share({ title:state.title || '旅程規劃', url }); return; } catch(e){} }
