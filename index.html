@@ -93,22 +93,22 @@
   .stop-meta input{font:inherit;font-size:12px;width:52px;border:1px solid var(--line);border-radius:6px;padding:2px 5px;text-align:right}
   .stop-note{font-size:12px;line-height:1.45;margin-top:5px;padding:4px 8px;border-radius:6px;background:#faf9f7;color:var(--ink);cursor:pointer;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;word-break:break-word}
   .stop-note:hover{background:#f0efeb}
-  .stop-note.empty{color:#b5b3ad;background:transparent;padding-left:0}
+  .stop-note.empty{color:#b5b3ad;background:transparent;padding-left:0;font-size:11.5px}
   #noteDlg textarea{width:100%;min-height:140px;font:inherit;font-size:15px;line-height:1.5;border:1px solid var(--line);border-radius:10px;padding:10px;resize:vertical}
   .stop-actions{display:flex;flex-direction:column;gap:0}
   .stop-actions button{padding:3px 6px;font-size:12px;border-color:transparent;color:var(--muted);background:transparent}
   .stop-actions button:hover{color:var(--ink);background:#f0efeb}
   .stop-actions button.del:hover{color:var(--danger)}
-  .leg{display:flex;align-items:center;gap:6px;padding:2px 4px 2px 12px;font-size:12px;color:var(--muted);min-height:28px}
+  .leg{display:flex;align-items:center;gap:6px;padding:2px 6px 2px 12px;font-size:12px;color:var(--muted);min-height:30px}
   .leg::before{content:"";width:2px;align-self:stretch;background:var(--line);margin-right:4px;border-radius:2px}
   .leg b{color:var(--ink);font-weight:600}
   .leg.long b{color:#b3530a}
   .leg select{font-size:13px;padding:1px 2px;border:1px solid transparent;border-radius:6px;background:transparent;cursor:pointer;width:36px;-webkit-appearance:none;appearance:none;text-align:center}
   .leg select:hover{border-color:var(--line);background:#fff}
   .leg select.custom{background:#eef8f0;border-color:#cfe8d5}
-  .leg .ins{margin-left:auto;padding:1px 7px;font-size:13px;border-color:transparent;color:var(--muted);background:transparent;line-height:1}
-  .leg .ins:hover{color:var(--ok);background:#eef8f0}
-  .leg .ins.on{color:#fff;background:var(--ok)}
+  .leg .ins{margin-left:auto;margin-right:2px;padding:0 8px;height:26px;font-size:12px;border:1px solid var(--line);border-radius:7px;color:var(--muted);background:#fff;line-height:1;white-space:nowrap}
+  .leg .ins:hover{color:var(--ok);border-color:#cfe8d5;background:#eef8f0}
+  .leg .ins.on{color:#fff;background:var(--ok);border-color:var(--ok)}
   .empty{color:var(--muted);font-size:12.5px;text-align:center;padding:12px}
   .day-foot{display:flex;gap:6px;padding:6px 10px 10px;justify-content:flex-end}
   .day-foot button{font-size:12px}
@@ -761,7 +761,7 @@ function legEl(day, di, r){
   const txt = document.createElement('span');
   txt.innerHTML = !r.c ? '計算中…' : r.c.err ? '查不到路線' : `<b>${fmtDur(r.c.sec)}</b> · ${fmtDist(r.c.m)}`;
   d.appendChild(txt);
-  const ins = document.createElement('button'); ins.className = 'ins' + (inserting && inserting.di === di && inserting.index === r.insertIndex ? ' on' : ''); ins.textContent = '＋'; ins.title = '在這裡插入行程';
+  const ins = document.createElement('button'); ins.className = 'ins' + (inserting && inserting.di === di && inserting.index === r.insertIndex ? ' on' : ''); ins.textContent = '＋ 插入'; ins.title = '在這兩站之間插入一站';
   ins.onclick = () => startInsert(di, r.insertIndex); d.appendChild(ins);
   return d;
 }
@@ -789,7 +789,7 @@ function stopEl(day, di, r){
   if (!fixed) {
     nameEl.addEventListener('blur', () => { const v = nameEl.textContent.trim(); if (v && v !== s.name) { s.name = v; save(); render(); } else nameEl.textContent = s.name; });
     nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); } });
-    const noteEl = el.querySelector('.stop-note'); noteEl.textContent = s.note || '＋ 備註'; noteEl.classList.toggle('empty', !s.note);
+    const noteEl = el.querySelector('.stop-note'); noteEl.textContent = s.note || '✎ 備註…'; noteEl.classList.toggle('empty', !s.note);
     noteEl.addEventListener('click', e => { e.stopPropagation(); openNote(s); });
     const stayIn = el.querySelector('.stop-meta input');
     stayIn.addEventListener('change', e => { s.stay = parseInt(e.target.value, 10) || 0; save(); render(); });
