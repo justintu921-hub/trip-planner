@@ -119,11 +119,34 @@
   .tl .p small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
   .tl .lg{grid-column:2;font-size:12px;color:var(--muted);padding:4px 0 4px 8px;border-left:2px solid var(--line);margin-left:4px}
 
-  /* 景點池 */
+  /* 景點池：小藥丸 */
   .pool .day-head{background:#f0efeb}
   .pool.closed .day-head{border-bottom:0}
-  .pool .num{background:#e6e4df;color:var(--muted)}
-  .pool .stop-actions button.pool{display:none}
+  .pool-list{display:flex;flex-wrap:wrap;gap:6px;padding:8px}
+  .pill{display:inline-flex;align-items:center;gap:2px;padding:0 2px 0 10px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:13px;cursor:grab;max-width:100%}
+  .pill:hover{border-color:#c9c7c1;background:#faf9f7}
+  .pill.sortable-ghost{opacity:.4;border-style:dashed}
+  .pill-name{padding:7px 0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+  .pill button{border:0;background:transparent;padding:6px 6px;font-size:14px;color:var(--muted);border-radius:999px;line-height:1}
+  .pill button:hover{background:#e8f0fe;color:var(--accent)}
+  .pill .pill-add{color:var(--accent);font-weight:700}
+  .pool-list .empty{width:100%}
+
+  /* 卡片右邊只留一顆 ⋯ */
+  .stop-actions .more{width:34px;height:34px;padding:0;font-size:18px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--muted)}
+  .stop-actions .more:hover{background:#f3f2ee;color:var(--ink)}
+
+  /* 動作抽屜 */
+  #sheet{padding:8px 8px 10px;max-width:420px}
+  .sheet-title{font-weight:700;font-size:14px;padding:8px 10px 10px;color:var(--muted);border-bottom:1px solid var(--line);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sheet-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;background:transparent;padding:13px 12px;font-size:15px;border-radius:10px}
+  .sheet-item:hover{background:#f3f2ee}
+  .sheet-item .ic{width:24px;text-align:center;font-size:16px}
+  .sheet-item.danger{color:var(--danger)}
+  .sheet-cancel{width:100%;margin-top:6px;padding:12px;font-size:15px;border-radius:10px;background:#f3f2ee;border:0}
+  @media (max-width:820px){
+    #sheet{margin:auto 0 0;max-width:100%;width:100%;border-radius:16px 16px 0 0;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  }
 
   /* 出發模式 */
   body.go .search,body.go #hint{display:none}
@@ -207,7 +230,7 @@
   <header>
     <div class="title-row">
       <input id="tripTitle" placeholder="旅程名稱" spellcheck="false">
-      <span class="seg"><button id="vMap" class="on">地圖</button><button id="vList">清單</button><button id="vGo">出發</button></span>
+      <span class="seg"><button id="vMap" class="on">規劃</button><button id="vGo">出發</button></span>
       <button class="ghost" id="btnMenu" title="更多">⋯</button>
     </div>
     <div class="toolbar">
@@ -261,6 +284,12 @@
     <button id="hNone">這天不回飯店</button>
     <button onclick="hotelDlg.close()">關閉</button>
   </div>
+</dialog>
+
+<dialog id="sheet">
+  <div class="sheet-title" id="sheetTitle"></div>
+  <div id="sheetBody"></div>
+  <button class="sheet-cancel" onclick="sheet.close()">取消</button>
 </dialog>
 
 <dialog id="expDlg">
@@ -543,12 +572,12 @@ function render(){
   $('#mode').value = state.mode; $('#startDate').value = state.startDate || '';
   document.body.classList.toggle('list', view !== 'map');
   document.body.classList.toggle('go', view === 'go');
-  ['map','list','go'].forEach(v => $('#v' + v[0].toUpperCase() + v.slice(1)).classList.toggle('on', view === v));
+  ['map','go'].forEach(v => $('#v' + v[0].toUpperCase() + v.slice(1)).classList.toggle('on', view === v));
   $('#searchBox').className = 'search' + (replacing ? ' replacing' : inserting ? ' inserting' : '');
   const hint = $('#hint'); hint.className = 'hint' + (replacing ? ' replace' : inserting ? ' insert' : '');
   if (replacing) { const s = listOf(replacing.di).find(x => x.id === replacing.id); hint.innerHTML = `搜尋新地點來取代「${s ? s.name : ''}」 <button id="cancelPick">取消</button>`; }
   else if (inserting) { hint.innerHTML = `搜尋地點，會插入 ${dayLabel(inserting.di)} 的第 ${inserting.index + 1} 站 <button id="cancelPick">取消</button>`; }
-  else hint.textContent = view === 'list' ? '清單模式：點「地圖」切回可拖拉的行程卡。' : view === 'go' ? '出發模式：打勾、導航、記帳，最下面結算。' : activeDay < 0 ? '搜尋結果會丟進景點池，之後再拖進各天。' : '搜尋結果會加到目前選取那天的最後。段落上的 ＋ 可以插在中間。';
+  else hint.textContent = view === 'go' ? '出發模式：打勾、導航、記帳，最下面結算。' : activeDay < 0 ? '搜尋結果會丟進景點池，之後拖進各天，或按池子裡的 ＋。' : '搜尋結果會加到目前選取那天的最後。段落上的 ＋ 可以插在中間。';
   if ($('#cancelPick')) $('#cancelPick').onclick = cancelPick;
 
   const wrap = $('#days'); wrap.innerHTML = '';
@@ -570,12 +599,20 @@ function render(){
         <button class="ghost" data-toggle>${poolOpen ? '收合' : '展開'}</button>
       </div>
       <div class="stops pool-list" data-day="-1" ${poolOpen ? '' : 'hidden'}></div>`;
-    pool.querySelector('.day-head').addEventListener('click', () => { if (activeDay !== -1) { activeDay = -1; render(); } });
+    pool.querySelector('.day-head').addEventListener('click', () => { if (activeDay !== -1) { lastReal = activeDay; activeDay = -1; render(); } });
     pool.querySelector('[data-toggle]').addEventListener('click', e => { e.stopPropagation(); poolOpen = !poolOpen; try { localStorage.setItem('tp-pool', poolOpen ? '1' : '0'); } catch(e){} render(); });
     const pl = pool.querySelector('.pool-list');
     if (!state.pool.length) pl.innerHTML = `<div class="empty">${activeDay < 0 ? '用上面的搜尋把想去的地方丟進來' : '點這裡的標題，再搜尋就會加進池子'}</div>`;
-    state.pool.forEach((s, i) => pl.appendChild(stopEl(null, -1, { s, i, n:i + 1, arrive:'', mode:state.mode })));
-    new Sortable(pl, { group:'stops', animation:160, draggable:'.stop', delay:120, delayOnTouchOnly:true, filter:'input,textarea,button,select,a,[contenteditable]', preventOnFilter:false, onEnd:onDragEnd });
+    state.pool.forEach(s => {
+      const pill = document.createElement('div'); pill.className = 'stop pill'; pill.dataset.id = s.id;
+      pill.innerHTML = `<span class="pill-name"></span><button class="pill-add" title="加到 ${dayLabel(lastRealDay())}">＋</button><button class="pill-more" title="更多">⋯</button>`;
+      pill.querySelector('.pill-name').textContent = s.name;
+      pill.querySelector('.pill-name').onclick = () => { if (map) { map.panTo({ lat:s.lat, lng:s.lng }); if (map.getZoom() < 13) map.setZoom(13); } };
+      pill.querySelector('.pill-add').onclick = () => { const di = lastRealDay(); state.pool.splice(state.pool.indexOf(s), 1); state.days[di].stops.push(s); save(); render(); toast(`已加到 ${dayLabel(di)}：${s.name}`); };
+      pill.querySelector('.pill-more').onclick = () => openSheet(-1, s);
+      pl.appendChild(pill);
+    });
+    new Sortable(pl, { group:'stops', animation:160, draggable:'.stop', delay:120, delayOnTouchOnly:true, filter:'button', preventOnFilter:false, onEnd:onDragEnd });
     wrap.appendChild(pool);
   }
 
@@ -597,7 +634,7 @@ function render(){
         ${st.seq.length > 1 ? `<span>⏱ 移動 ${st.pending ? '計算中…' : fmtDur(st.drive)}</span><span>📏 ${fmtDist(st.dist)}</span><span>🏁 約 ${st.end} 結束</span>` : ''}
       </div>
       ${ld.lv >= 2 ? `<div class="day-warn l${ld.lv}">⚠ ${ld.warns.join('、')}</div>` : ''}
-      ${view === 'list' ? `<div class="tl"></div>` : `<div class="stops" data-day="${di}"></div>`}
+      <div class="stops" data-day="${di}"></div>
       <div class="day-foot">
         ${day.stops.length >= 3 ? `<button data-opt title="只看開車距離排最短，不管營業時間、訂位時段，也不管你某段設了步行或大眾運輸。排完可以復原。">✨ 一鍵排順</button>` : ''}
         ${st.seq.length > 1 ? `<a href="${gmapsUrl(st.seq)}" target="_blank" rel="noopener"><button>在 Google Maps 開整天</button></a>` : ''}
@@ -614,23 +651,7 @@ function render(){
     const optBtn = el.querySelector('[data-opt]'); if (optBtn) optBtn.addEventListener('click', () => optimizeDay(di));
     el.querySelector('[data-del-day]').addEventListener('click', () => { if (confirm(`確定${state.days.length === 1 ? '清空' : '刪除'}「${dayLabel(di)}」？`)) removeDay(di); });
 
-    if (view === 'list') {
-      const tl = el.querySelector('.tl');
-      if (!st.seq.length) tl.innerHTML = '<div class="empty" style="grid-column:1/-1">這天還沒有行程</div>';
-      st.rows.forEach(r => {
-        if (r.type === 'stop') {
-          const t = document.createElement('div'); t.className = 't'; t.textContent = r.arrive; tl.appendChild(t);
-          const p = document.createElement('div'); p.className = 'p'; p.innerHTML = '<b></b><small></small>';
-          p.querySelector('b').textContent = r.s.fixed ? `🏨 ${r.s.name}${r.s.fixed === 'from' ? '（出發）' : '（回飯店）'}` : `${r.n}. ${r.s.name}`;
-          p.querySelector('small').textContent = [r.s.stay ? `停留 ${r.s.stay} 分` : '', r.s.note].filter(Boolean).join(' · ');
-          tl.appendChild(p);
-        } else {
-          const l = document.createElement('div'); l.className = 'lg';
-          l.textContent = !r.c ? `${MODES[r.mode]} 計算中…` : r.c.err ? `${MODES[r.mode]} 查不到路線` : `${MODES[r.mode]} ${fmtDur(r.c.sec)} · ${fmtDist(r.c.m)}`;
-          tl.appendChild(l);
-        }
-      });
-    } else {
+    {
       const list = el.querySelector('.stops');
       if (!st.seq.length) list.innerHTML = `<div class="empty">這天還沒有行程，${di === activeDay ? '用上面的搜尋加入地點' : '點這天的標題再搜尋'}</div>`;
       else if (!day.stops.length && st.seq.length === 1) { /* 只有飯店 */ }
@@ -701,12 +722,7 @@ function stopEl(day, di, r){
       </div>
       ${fixed ? '' : '<input class="stop-note" placeholder="備註：訂位、門票、想吃什麼…">'}
     </div>
-    ${fixed ? '<div></div>' : `<div class="stop-actions">
-      <button class="del" title="移除">✕</button>
-      <button class="dup" title="複製一份">⧉</button>
-      <button class="rep" title="換成別的地點">⇄</button>
-      ${inPool ? '' : '<button class="pool" title="放回景點池">🧺</button>'}
-    </div>`}`;
+    ${fixed ? '<div></div>' : `<div class="stop-actions"><button class="more" title="更多">⋯</button></div>`}`;
   const nameEl = el.querySelector('.stop-name'); nameEl.textContent = s.name;
   el.querySelector('.stop-addr').textContent = s.addr;
   if (!fixed) {
@@ -717,10 +733,7 @@ function stopEl(day, di, r){
     const stayIn = el.querySelector('.stop-meta input');
     stayIn.addEventListener('change', e => { s.stay = parseInt(e.target.value, 10) || 0; save(); render(); });
     stayIn.addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
-    el.querySelector('.del').addEventListener('click', () => removeStop(di, s.id));
-    el.querySelector('.dup').addEventListener('click', () => duplicateStop(di, s.id));
-    el.querySelector('.rep').addEventListener('click', () => startReplace(di, s.id));
-    const pb = el.querySelector('.pool'); if (pb) pb.addEventListener('click', () => toPool(di, s.id));
+    el.querySelector('.more').addEventListener('click', () => openSheet(di, s));
   }
   el.addEventListener('click', e => {
     if (e.target.closest('input,button,a,[contenteditable]')) return;
@@ -729,6 +742,28 @@ function stopEl(day, di, r){
   });
   return el;
 }
+
+/* ============================================================ 卡片動作選單（手機是底部抽屜） */
+let lastReal = 0;
+function lastRealDay(){ return activeDay >= 0 ? activeDay : Math.min(lastReal, state.days.length - 1); }
+function openSheet(di, s){
+  const inPool = di < 0, sheet = $('#sheet'), body = $('#sheetBody');
+  $('#sheetTitle').textContent = s.name;
+  const items = [];
+  if (inPool) items.push(['➕', `加到 ${dayLabel(lastRealDay())}`, () => { const d = lastRealDay(); state.pool.splice(state.pool.indexOf(s), 1); state.days[d].stops.push(s); save(); render(); }]);
+  items.push(['✏️', '改名', () => { const v = prompt('新名稱', s.name); if (v && v.trim()) { s.name = v.trim(); save(); render(); } }]);
+  items.push(['⇄', '換成別的地點（保留停留、備註）', () => startReplace(di, s.id)]);
+  if (!inPool) {
+    items.push(['⧉', '複製一份在下面', () => duplicateStop(di, s.id)]);
+    items.push(['＋', '在這之後插入一站', () => startInsert(di, state.days[di].stops.indexOf(s) + 1)]);
+    items.push(['🧺', '放回景點池', () => toPool(di, s.id)]);
+  }
+  items.push(['🗑', '刪除', () => { if (confirm(`刪除「${s.name}」？`)) removeStop(di, s.id); }, 'danger']);
+  body.innerHTML = '';
+  items.forEach(([ic, label, fn, cls]) => { const b = document.createElement('button'); b.className = 'sheet-item ' + (cls || ''); b.innerHTML = `<span class="ic">${ic}</span><span></span>`; b.lastChild.textContent = label; b.onclick = () => { sheet.close(); fn(); }; body.appendChild(b); });
+  sheet.showModal();
+}
+$('#sheet').addEventListener('click', e => { if (e.target === $('#sheet')) $('#sheet').close(); });
 
 /* ============================================================ 出發模式（旅途中用：打勾、導航、記帳、結算） */
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -999,7 +1034,6 @@ $('#startDate').addEventListener('change', e => { state.startDate = e.target.val
 $('#mode').addEventListener('change', e => { state.mode = e.target.value; save(); render(); });
 $('#btnAddDay').addEventListener('click', addDay);
 $('#vMap').addEventListener('click', () => { view = 'map'; render(); setTimeout(() => map && google.maps.event.trigger(map, 'resize'), 50); });
-$('#vList').addEventListener('click', () => { view = 'list'; render(); });
 $('#vGo').addEventListener('click', () => { view = 'go'; $('#days')._scrolled = false; render(); });
 $('#showAll').addEventListener('change', e => { showAll = e.target.checked; drawMarkers(); });
 $('#btnShare').addEventListener('click', async () => {
