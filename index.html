@@ -280,6 +280,7 @@
     <div class="title-row">
       <input id="tripTitle" placeholder="旅程名稱" spellcheck="false">
       <span class="seg"><button id="vMap" class="on">規劃</button><button id="vGo">出發</button></span>
+      <button class="ghost" id="btnUndo" title="復原上一步（Ctrl+Z）" hidden>↶</button>
       <span id="syncDot" class="sync" hidden title="共筆同步狀態"></span>
       <button class="ghost" id="btnShareTop" title="分享" hidden>📤</button>
       <button class="ghost" id="btnMenu" title="更多">⋯</button>
@@ -481,9 +482,12 @@ function load(){
   try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.days) state = normalize(s); } catch(e){}
   try { poolOpen = localStorage.getItem('tp-pool') !== '0'; } catch(e){}
 }
-let hashTimer;
+let hashTimer, undoStack = [], lastSaved = null, skipUndo = false;
 function save(){
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){}
+  const now = JSON.stringify(state);
+  if (!skipUndo && lastSaved !== null && now !== lastSaved) { undoStack.push(lastSaved); if (undoStack.length > 30) undoStack.shift(); }
+  lastSaved = now; updateUndoBtn();
+  try { localStorage.setItem(KEY, now); } catch(e){}
   // 同步寫進網址：把網頁加入書籤或加到主畫面，那個連結本身就是存檔
   if (roomId) { schedulePush(); return; }
   clearTimeout(hashTimer); hashTimer = setTimeout(() => { try { history.replaceState(null, '', location.pathname + location.search + '#t=' + LZString.compressToEncodedURIComponent(JSON.stringify(state))); } catch(e){} }, 800);
@@ -578,7 +582,7 @@ function pickPlace(p){
 }
 const newStop = p => ({ id:uid(), name:p.name, addr:p.addr || '', lat:p.lat, lng:p.lng, pid:p.pid || '', stay:60, note:p.note || '' });
 function addStop(p, di = activeDay){ listOf(di).push(newStop(p)); if (di < 0) poolOpen = true; save(); render(); toast(`已加入 ${targetLabel(di)}：${p.name}`); }
-function removeStop(di, id){ const l = listOf(di), i = l.findIndex(s => s.id === id); if (i >= 0) l.splice(i, 1); save(); render(); }
+function removeStop(di, id){ const l = listOf(di), i = l.findIndex(s => s.id === id); if (i < 0) return; const [x] = l.splice(i, 1); save(); render(); toastUndo(`已刪除「${x.name}」`); }
 function duplicateStop(di, id){ const list = listOf(di), i = list.findIndex(s => s.id === id); list.splice(i + 1, 0, { ...list[i], id:uid() }); save(); render(); toast('已複製一份在下面，拖到想要的位置'); }
 function toPool(di, id){ const l = listOf(di), i = l.findIndex(s => s.id === id); if (i < 0) return; const [s] = l.splice(i, 1); state.pool.push(s); poolOpen = true; save(); render(); toast(`「${s.name}」放回口袋`); }
 function startReplace(di, id){ inserting = null; replacing = { di, id }; render(); $('#q').focus(); }
@@ -674,6 +678,7 @@ let rendering = false, pendingRender = false;
 function render(){
   if (rendering) { pendingRender = true; return; }
   rendering = true;
+  if (lastSaved === null) lastSaved = JSON.stringify(state);
   $('#tripTitle').value = state.title;
   document.title = (state.title || '旅程規劃') + ' · 旅程規劃';
   $('#mode').value = state.mode; $('#startDate').value = state.startDate || '';
@@ -793,6 +798,7 @@ function onDragEnd(evt){
   let ni = idxIn(evt.to, evt.item); if (ni < 0) ni = toList.length;
   toList.splice(Math.min(ni, toList.length), 0, moved);
   activeDay = to; save(); render();
+  toastUndo(from === to ? `已移動「${moved.name}」` : `「${moved.name}」移到 ${targetLabel(to)}`);
 }
 
 function legEl(day, di, r){
@@ -888,11 +894,12 @@ async function joinRoom(){
     for (let i = 0; i < n; i++) days.push(d['d' + i] ? d['d' + i] : (state.days[i] || { start:'09:00', stops:[] }));
     if (JSON.stringify(days.map(cloudDay)) !== JSON.stringify(state.days.map(cloudDay))) { state.days = days; changed = true; }
     lastSent = cloudPlan(); applying = false;
+    if (changed) { lastSaved = JSON.stringify(state); undoStack = []; updateUndoBtn(); }
     if (changed) { try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){} if (activeDay >= state.days.length) activeDay = state.days.length - 1; render(); }
   }, err => { console.error(err); setSync('off'); toast('共筆連線失敗：' + err.code); });
   roomRef.collection('expenses').onSnapshot(snap => {
     const list = snap.docs.map(x => x.data()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
-    if (JSON.stringify(list) !== JSON.stringify(state.expenses)) { state.expenses = list; try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){} render(); }
+    if (JSON.stringify(list) !== JSON.stringify(state.expenses)) { state.expenses = list; lastSaved = JSON.stringify(state); try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){} render(); }
   });
   window.addEventListener('online', () => setSync('busy')); window.addEventListener('offline', () => setSync('off'));
 }
@@ -1288,6 +1295,7 @@ $('#vMap').addEventListener('click', () => { view = 'map'; render(); setTimeout(
 $('#vGo').addEventListener('click', () => { view = 'go'; $('#days')._scrolled = false; render(); });
 $('#showAll').addEventListener('change', e => { showAll = e.target.checked; drawMarkers(); });
 $('#btnShareTop').addEventListener('click', () => $('#btnShare').click());
+$('#btnUndo').addEventListener('click', undo);
 $('#btnShare').addEventListener('click', async () => {
   const url = shareUrl(); $('#shareUrl').value = url; if (!roomId) history.replaceState(null, '', url.slice(url.indexOf('#')));
   $('#shareHint').textContent = roomId ? '這是共筆連結：旅伴打開就跟你編輯同一份，改動幾秒內互相同步。拿到連結的人都能改，只貼給旅伴。' : '整份行程都壓在這個連結裡，旅伴打開就能看、也能改。對方改完再把新連結傳回來即可。';
@@ -1332,8 +1340,26 @@ function ask(msg, title = '確認', okText = '確定', danger = false){
   });
 }
 
+function undo(){
+  if (!undoStack.length) return toast('沒有可以復原的');
+  const prev = undoStack.pop(); skipUndo = true;
+  try { state = normalize(JSON.parse(prev)); } finally { skipUndo = false; }
+  lastSaved = null; save(); lastSaved = prev;  // 這次不再推進 undo 堆疊
+  if (activeDay >= state.days.length) activeDay = state.days.length - 1;
+  if (roomRef) state.expenses.forEach(pushExpense);
+  render(); toast(`已復原${undoStack.length ? `，還可以再退 ${undoStack.length} 步` : ''}`);
+  updateUndoBtn();
+}
+function updateUndoBtn(){ const b = $('#btnUndo'); if (b) b.hidden = !undoStack.length; }
+// 拖拉、刪除這種容易誤觸的動作：跳一個帶「復原」的提示
+function toastUndo(msg){
+  const t = $('#toast'); t.innerHTML = ''; t.append(msg + ' '); const b = document.createElement('button'); b.textContent = '復原'; b.style.cssText = 'margin-left:8px;padding:2px 10px;font-size:12px;background:#fff;border-radius:6px'; b.onclick = () => { undo(); }; t.appendChild(b);
+  t.style.pointerEvents = 'auto'; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.classList.remove('show'); t.style.pointerEvents = ''; }, 6000);
+}
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.target.closest('input,textarea,[contenteditable]')) { e.preventDefault(); undo(); } });
+
 let toastTimer;
-function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400); }
+function toast(msg){ const t = $('#toast'); t.style.pointerEvents = ''; t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400); }
 
 load();
 </script>
