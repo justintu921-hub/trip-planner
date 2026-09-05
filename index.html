@@ -593,7 +593,15 @@ async function routeDay(di){
     try {
       const r = await dirService.route({ origin:pts[0], destination:pts[pts.length - 1], waypoints:pts.slice(1, -1).map(s => ({ location:s, stopover:true })), travelMode:g.mode, language:'zh-TW' });
       r.routes[0].legs.forEach((leg, i) => legCache.set(legKey(pts[i], pts[i + 1], g.mode), { sec:leg.duration.value, m:leg.distance.value, path:pathOf(leg) }));
-    } catch(e) { console.warn('route fail', g.mode, e.code || e); pts.slice(0, -1).forEach((p, i) => legCache.set(legKey(p, pts[i + 1], g.mode), { err:true })); }
+    } catch(e) {
+      console.warn('route fail', g.mode, e.code || e);
+      // 整段一起查失敗（常見是其中一站到不了，例如不同島），退回逐段查，只讓真的到不了的那段顯示查不到
+      for (let i = 0; i < pts.length - 1; i++) {
+        const k = legKey(pts[i], pts[i + 1], g.mode); if (legCache.has(k)) continue;
+        if (pts.length > 2) { try { const r = await dirService.route({ origin:pts[i], destination:pts[i + 1], travelMode:g.mode, language:'zh-TW' }); const leg = r.routes[0].legs[0]; legCache.set(k, { sec:leg.duration.value, m:leg.distance.value, path:pathOf(leg) }); continue; } catch(e2){} }
+        legCache.set(k, { err:true });
+      }
+    }
   }
   return changed;
 }
