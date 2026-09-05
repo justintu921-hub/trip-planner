@@ -7,7 +7,7 @@
 <style>
   :root{
     --bg:#f6f5f2; --panel:#fff; --ink:#1d1d1b; --muted:#6b6b66; --line:#e6e4df;
-    --accent:#1a73e8; --accent-ink:#fff; --danger:#c8402f;
+    --accent:#1a73e8; --accent-ink:#fff; --danger:#c8402f; --ok:#188038;
     --sidebar:440px; --radius:12px;
     font-family: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
   }
@@ -15,26 +15,23 @@
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink)}
   body{display:grid;grid-template-columns:var(--sidebar) 1fr;height:100dvh;width:100%;overflow:hidden}
   aside,main{min-width:0;min-height:0}
-  /* 分隔線：電腦版在側欄右邊、手機版在地圖和行程之間 */
-  #divider{position:absolute;z-index:8;touch-action:none;user-select:none}
-  #divider::after{content:"";position:absolute;background:#c9c7c1;border-radius:3px}
-  #divider:hover::after,#divider.on::after{background:var(--accent)}
-  body.list #divider{display:none}
   body.list{grid-template-columns:1fr}
   body.list main{display:none}
   body.list aside{border-right:0}
-  body.list #days{max-width:860px;margin:0 auto;width:100%}
-  body.list header{max-width:860px;margin:0 auto;width:100%}
+  body.list #days,body.list header{max-width:860px;margin:0 auto;width:100%}
 
-  aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;position:relative}
-  #divider{top:0;bottom:0;right:-5px;width:10px;cursor:col-resize}
-  #divider::after{top:50%;left:3px;width:4px;height:44px;transform:translateY(-50%)}
+  aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;position:relative}
+  #divider{position:absolute;z-index:8;touch-action:none;user-select:none;top:0;bottom:0;right:-5px;width:10px;cursor:col-resize}
+  #divider::after{content:"";position:absolute;background:#c9c7c1;border-radius:3px;top:50%;left:3px;width:4px;height:44px;transform:translateY(-50%)}
+  #divider:hover::after,#divider.on::after{background:var(--accent)}
+  body.list #divider{display:none}
+
   header{padding:12px 16px 10px;border-bottom:1px solid var(--line)}
   .title-row{display:flex;align-items:center;gap:6px}
   #tripTitle{flex:1;font-size:20px;font-weight:700;border:0;background:transparent;padding:4px 6px;border-radius:8px;min-width:0}
   #tripTitle:focus{outline:2px solid var(--accent);background:#f3f7fd}
   .toolbar{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center}
-  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);padding:6px 10px;border-radius:8px;font-size:13px;line-height:1.2;white-space:nowrap}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);padding:6px 8px;border-radius:8px;font-size:13px;line-height:1.2;white-space:nowrap}
   button:hover{background:#f3f2ee}
   button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
   button.primary:hover{background:#1765cc}
@@ -42,8 +39,7 @@
   button.ghost:hover{background:#f3f2ee;color:var(--ink)}
   select,input[type=date],input[type=time]{font:inherit;font-size:13px;padding:5px 6px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
   #startDate{width:122px}
-  #mode{width:92px}
-  .toolbar button{padding:6px 8px}
+  #mode{width:110px}
   .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .seg button{border:0;border-radius:0;padding:6px 10px}
   .seg button.on{background:var(--ink);color:#fff}
@@ -51,6 +47,7 @@
   .search input{width:100%;font:inherit;font-size:14px;padding:10px 12px 10px 36px;border:1px solid var(--line);border-radius:10px;background:#faf9f7}
   .search input:focus{outline:2px solid var(--accent);background:#fff}
   .search.replacing input{outline:2px solid #e8710a;background:#fff7ee}
+  .search.inserting input{outline:2px solid var(--ok);background:#eef8f0}
   .search svg{position:absolute;left:11px;top:11px;width:18px;height:18px;fill:var(--muted)}
   .results{position:absolute;left:0;right:0;top:100%;z-index:20;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);max-height:280px;overflow:auto;margin-top:4px}
   .results:empty{display:none}
@@ -59,17 +56,20 @@
   .result:hover{background:#f3f7fd}
   .result b{display:block;font-size:14px;font-weight:600}
   .result span{color:var(--muted)}
-  .hint{font-size:12px;color:var(--muted);margin-top:6px;display:flex;align-items:center;gap:8px}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .hint.replace{color:#b3530a}
+  .hint.insert{color:var(--ok)}
   .hint button{padding:2px 8px;font-size:12px}
 
   #days{flex:1;overflow:auto;padding:10px 12px 90px;min-height:0}
   .day{margin-bottom:14px;border:1px solid var(--line);border-radius:var(--radius);background:#fff;overflow:hidden}
   .day.active{box-shadow:0 0 0 2px var(--dc)}
-  .day-head{display:flex;align-items:center;gap:8px;padding:9px 10px 9px 12px;background:#faf9f7;border-bottom:1px solid var(--line);cursor:pointer}
+  .day-head{display:flex;align-items:center;gap:6px;padding:8px 8px 8px 12px;background:#faf9f7;border-bottom:1px solid var(--line);cursor:pointer}
   .day-dot{width:10px;height:10px;border-radius:50%;background:var(--dc);flex:none}
   .day-name{font-weight:700;font-size:14px;flex:1;min-width:0}
   .day-head input[type=time]{font-size:12px;padding:2px 4px;border-radius:6px}
+  .day-head .hotelBtn{padding:3px 6px;font-size:12px;border-color:transparent;background:transparent}
+  .day-head .hotelBtn:hover{background:#f0efeb}
   .load{font-size:11px;padding:2px 7px;border-radius:999px;font-weight:600;white-space:nowrap}
   .load.l0{background:#e6f4ea;color:#137333}.load.l1{background:#fef7e0;color:#b06000}.load.l2{background:#fde9d9;color:#b3530a}.load.l3{background:#fce8e6;color:#c5221f}
   .day-summary{font-size:12px;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap}
@@ -80,13 +80,18 @@
   .stop:hover{background:#faf9f7;border-color:var(--line)}
   .stop.sortable-ghost{opacity:.35;background:#e8f0fe;border:1px dashed var(--accent)}
   .stop.replacing{background:#fff7ee;border-color:#e8710a}
+  .stop.fixed{cursor:default;background:#faf9f7}
+  .stop.fixed .num{background:#fff;color:var(--dc);border:2px solid var(--dc);font-size:13px}
   .num{width:24px;height:24px;border-radius:50%;background:var(--dc);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;margin-top:2px}
   .stop-body{min-width:0}
-  .stop-name{font-weight:600;font-size:14px;line-height:1.3;word-break:break-word}
+  .stop-name{font-weight:600;font-size:14px;line-height:1.3;word-break:break-word;border-radius:4px;padding:0 2px;margin:0 -2px}
+  .stop-name[contenteditable]:hover{background:#f0efeb}
+  .stop-name[contenteditable]:focus{outline:2px solid var(--accent);background:#fff}
   .stop-addr{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .stop-meta{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
   .stop-meta .arrive{background:#f0efeb;border-radius:6px;padding:2px 7px;font-variant-numeric:tabular-nums}
   .stop-meta input{font:inherit;font-size:12px;width:52px;border:1px solid var(--line);border-radius:6px;padding:2px 5px;text-align:right}
+  .stop-meta a.nav{color:var(--accent);text-decoration:none;font-size:12px;margin-left:auto;padding:2px 6px;border-radius:6px;border:1px solid #d4e3fb;background:#f3f7fd}
   .stop-note{width:100%;font:inherit;font-size:12px;border:0;border-bottom:1px dashed var(--line);background:transparent;padding:3px 0;margin-top:4px;color:var(--ink)}
   .stop-note::placeholder{color:#b5b3ad}
   .stop-note:focus{outline:0;border-bottom-color:var(--accent)}
@@ -94,29 +99,33 @@
   .stop-actions button{padding:3px 6px;font-size:12px;border-color:transparent;color:var(--muted);background:transparent}
   .stop-actions button:hover{color:var(--ink);background:#f0efeb}
   .stop-actions button.del:hover{color:var(--danger)}
-  .leg{display:flex;align-items:center;gap:8px;padding:2px 0 2px 17px;font-size:12px;color:var(--muted);height:24px}
-  .leg::before{content:"";width:2px;height:100%;background:var(--line);margin-right:6px;border-radius:2px}
+  .leg{display:flex;align-items:center;gap:6px;padding:2px 4px 2px 12px;font-size:12px;color:var(--muted);min-height:28px}
+  .leg::before{content:"";width:2px;align-self:stretch;background:var(--line);margin-right:4px;border-radius:2px}
   .leg b{color:var(--ink);font-weight:600}
   .leg.long b{color:#b3530a}
-  .leg a{color:var(--accent);text-decoration:none;margin-left:auto;margin-right:10px;font-size:11px}
+  .leg select{font-size:13px;padding:1px 2px;border:1px solid transparent;border-radius:6px;background:transparent;cursor:pointer;width:36px;-webkit-appearance:none;appearance:none;text-align:center}
+  .leg select:hover{border-color:var(--line);background:#fff}
+  .leg select.custom{background:#eef8f0;border-color:#cfe8d5}
+  .leg .ins{margin-left:auto;padding:1px 7px;font-size:13px;border-color:transparent;color:var(--muted);background:transparent;line-height:1}
+  .leg .ins:hover{color:var(--ok);background:#eef8f0}
+  .leg .ins.on{color:#fff;background:var(--ok)}
   .empty{color:var(--muted);font-size:12.5px;text-align:center;padding:12px}
   .day-foot{display:flex;gap:6px;padding:6px 10px 10px;justify-content:flex-end}
   .day-foot button{font-size:12px}
 
-  /* list view */
   .tl{display:grid;grid-template-columns:64px 1fr;gap:0 10px;padding:6px 12px 10px}
   .tl .t{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);padding:8px 0;text-align:right}
   .tl .p{padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
   .tl .p small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
   .tl .lg{grid-column:2;font-size:12px;color:var(--muted);padding:4px 0 4px 8px;border-left:2px solid var(--line);margin-left:4px}
 
-  main{position:relative;min-width:0}
+  main{position:relative}
   #map{position:absolute;inset:0}
   .map-ui{position:absolute;top:12px;left:12px;right:60px;display:flex;gap:8px;align-items:center;z-index:5;flex-wrap:wrap}
   .map-badge{background:#fff;padding:6px 10px;border-radius:8px;font-size:12px;color:var(--muted);box-shadow:0 2px 8px rgba(0,0,0,.15)}
   .map-ui label{background:#fff;padding:6px 10px;border-radius:8px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;gap:6px;align-items:center;cursor:pointer}
 
-  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d1d1b;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:99}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d1d1b;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:99;max-width:90vw;text-align:center}
   #toast.show{opacity:1}
   dialog{border:0;border-radius:14px;padding:20px;max-width:460px;width:calc(100% - 32px);box-shadow:0 20px 60px rgba(0,0,0,.25)}
   dialog::backdrop{background:rgba(0,0,0,.35)}
@@ -127,8 +136,12 @@
   .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
   .field{margin-bottom:10px}
   .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
-  .flight-res{background:#f6f5f2;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;margin-top:8px}
+  .flight-res,.hotel-cur{background:#f6f5f2;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;margin-top:8px}
   .flight-res b{font-size:15px}
+  .hres{border:1px solid var(--line);border-radius:10px;max-height:200px;overflow:auto;margin-top:6px}
+  .hres:empty{display:none}
+  .opts{display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:13px}
+  .opts label{display:flex;gap:8px;align-items:center;cursor:pointer}
 
   @media (max-width:820px){
     body{grid-template-columns:1fr;grid-template-rows:var(--mapH,38dvh) 1fr}
@@ -144,13 +157,14 @@
     .toolbar{gap:5px}
     .toolbar button{padding:6px 7px;font-size:12.5px}
     #startDate{width:112px;font-size:12.5px}
+    #mode{width:100px;font-size:12.5px}
   }
 </style>
 </head>
 <body>
 
 <aside>
-  <div id="divider" title="拖拉調整地圖大小"></div>
+  <div id="divider" title="拖拉調整大小，連點兩下還原"></div>
   <header>
     <div class="title-row">
       <input id="tripTitle" placeholder="旅程名稱" spellcheck="false">
@@ -159,10 +173,10 @@
     </div>
     <div class="toolbar">
       <input type="date" id="startDate" title="出發日期">
-      <select id="mode" title="交通方式">
-        <option value="DRIVING">🚗 開車</option>
-        <option value="TRANSIT">🚌 大眾運輸</option>
-        <option value="WALKING">🚶 步行</option>
+      <select id="mode" title="預設交通方式（每段可另外改）">
+        <option value="DRIVING">🚗 預設開車</option>
+        <option value="TRANSIT">🚌 預設大眾</option>
+        <option value="WALKING">🚶 預設步行</option>
       </select>
       <button id="btnAddDay">＋ 一天</button>
       <button id="btnFlight">✈️ 航班</button>
@@ -173,7 +187,7 @@
       <input id="q" placeholder="搜尋景點、餐廳、飯店… 按 Enter" autocomplete="off">
       <div class="results" id="results"></div>
     </div>
-    <div class="hint" id="hint">搜尋結果會加到目前選取的那一天。拖拉卡片可以排序或搬到別天。</div>
+    <div class="hint" id="hint"></div>
   </header>
   <div id="days"></div>
 </aside>
@@ -193,6 +207,21 @@
   <p>整份行程都壓在這個連結裡，旅伴打開就能看、也能改。對方改完再把新連結傳回來即可。</p>
   <textarea id="shareUrl" readonly></textarea>
   <div class="row"><button id="btnCopy" class="primary">複製連結</button><button onclick="shareDlg.close()">關閉</button></div>
+</dialog>
+
+<dialog id="hotelDlg">
+  <h3>🏨 <span id="hDayName"></span> 住哪</h3>
+  <div class="hotel-cur" id="hCur"></div>
+  <div class="field" style="margin-top:10px"><label>搜尋飯店</label><input type="text" id="hQ" placeholder="飯店名稱，按 Enter" autocomplete="off"><div class="hres" id="hRes"></div></div>
+  <div class="opts">
+    <label><input type="radio" name="hApply" value="from" checked> 這天起之後都住這裡（到換飯店為止）</label>
+    <label><input type="radio" name="hApply" value="one"> 只有這天</label>
+  </div>
+  <div class="row">
+    <button id="hSame">跟前一天一樣</button>
+    <button id="hNone">這天不回飯店</button>
+    <button onclick="hotelDlg.close()">關閉</button>
+  </div>
 </dialog>
 
 <dialog id="flightDlg">
@@ -226,13 +255,13 @@
 <script>
 /* ============================================================ 狀態 */
 const KEY = 'trip-planner-v1', RK = 'tp-rapidapi-key';
-// AeroDataBox（RapidAPI BASIC 免費方案，未綁卡，額度用完只會查不到）。瀏覽器裡若另存了 key 會優先用
 const DEFAULT_RAPIDAPI_KEY = '6fc269739cmsh4cc83422a43b35ap1d02f2jsnf80478945884';
 const rapidKey = () => localStorage.getItem(RK) || DEFAULT_RAPIDAPI_KEY;
 const COLORS = ['#1a73e8','#e8710a','#188038','#9334e6','#d93025','#0b8043','#f9ab00','#007b83'];
+const MODES = { DRIVING:'🚗', TRANSIT:'🚌', WALKING:'🚶' };
 let state = { title:'', mode:'DRIVING', startDate:'', days:[{ start:'09:00', stops:[] }] };
-let activeDay = 0, view = 'map', showAll = false, replacing = null;  // replacing = {di,id}
-let map, dirService, renderer, markers = [], placesLib, fallbackLine;
+let activeDay = 0, view = 'map', showAll = false, replacing = null, inserting = null, hotelFor = null;
+let map, dirService, markers = [], lines = [], placesLib;
 const legCache = new Map();
 
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -248,12 +277,29 @@ function dayLabel(di){
 }
 function dayDate(di){ if (!state.startDate) return ''; const dt = new Date(state.startDate + 'T00:00:00'); dt.setDate(dt.getDate() + di); return dt.toISOString().slice(0,10); }
 
+// 住宿：day.hotel === undefined → 跟前一天一樣；null → 不回飯店；物件 → 這天住這
+function hotelOf(di){ for (let i = di; i >= 0; i--) { const h = state.days[i].hotel; if (h !== undefined) return h; } return null; }
+function hotelInherited(di){ return state.days[di].hotel === undefined && di > 0 && hotelOf(di - 1); }
+
+// 一天的完整順序：出發飯店（虛擬）+ 行程 + 回飯店（虛擬，最後一天沒有）
+function seqOf(di){
+  const d = state.days[di], seq = [];
+  const from = di > 0 ? hotelOf(di - 1) : null;
+  if (from) seq.push({ ...from, id:'h0-' + di, fixed:'from', stay:0, note:'', modeTo:d.hotelModeTo });
+  d.stops.forEach(s => seq.push(s));
+  const to = di < state.days.length - 1 ? hotelOf(di) : null;
+  if (to) seq.push({ ...to, id:'h1-' + di, fixed:'to', stay:0, note:'' });
+  return seq;
+}
+const legMode = s => s.modeTo || state.mode;
+
 function load(){
   const h = location.hash.slice(1);
   if (h.startsWith('t=')) { try { const s = JSON.parse(LZString.decompressFromEncodedURIComponent(h.slice(2))); if (s && s.days) { state = s; save(); toast('已載入分享的行程'); return; } } catch(e){} }
   try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.days) state = s; } catch(e){}
 }
-// ?trip=名稱 → 從 trips/名稱.json 載入（短網址用）。第一次開才覆蓋，之後改的存在瀏覽器裡
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} }
+function shareUrl(){ return location.origin + location.pathname + '#t=' + LZString.compressToEncodedURIComponent(JSON.stringify(state)); }
 async function loadNamedTrip(){
   const name = new URLSearchParams(location.search).get('trip');
   if (!name || !/^[\w-]+$/.test(name)) return;
@@ -261,12 +307,10 @@ async function loadNamedTrip(){
     const r = await fetch(`trips/${name}.json`, { cache:'no-cache' }); if (!r.ok) throw 0;
     const s = await r.json(); if (!s.days) throw 0;
     const stamp = JSON.stringify(s).length + ':' + name;
-    if (localStorage.getItem(KEY + ':trip') === stamp) return;  // 這版已經載過，保留使用者自己的修改
+    if (localStorage.getItem(KEY + ':trip') === stamp) return;
     state = s; save(); localStorage.setItem(KEY + ':trip', stamp); render(); toast(`已載入「${s.title || name}」`);
   } catch(e) { toast('找不到這份行程'); }
 }
-function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} }
-function shareUrl(){ return location.origin + location.pathname + '#t=' + LZString.compressToEncodedURIComponent(JSON.stringify(state)); }
 
 /* ============================================================ Google Maps */
 async function initMap(){
@@ -291,7 +335,6 @@ async function initMap(){
     ],
   });
   dirService = new google.maps.DirectionsService();
-  renderer = new google.maps.DirectionsRenderer({ map, suppressMarkers:true, preserveViewport:true, polylineOptions:{ strokeWeight:4, strokeOpacity:.85 } });
   map.addListener('click', async e => {
     if (!e.placeId) return; e.stop();
     const p = new placesLib.Place({ id:e.placeId });
@@ -304,23 +347,27 @@ async function initMap(){
 }
 
 /* ---------- 搜尋 ---------- */
+async function textSearch(q, n = 8){
+  const { places } = await placesLib.Place.searchByText({ textQuery:q, fields:['displayName','formattedAddress','location','id'], locationBias:(map && map.getBounds()) || undefined, language:'zh-TW', maxResultCount:n });
+  return places.map(p => ({ name:p.displayName, addr:p.formattedAddress || '', lat:p.location.lat(), lng:p.location.lng(), pid:p.id }));
+}
+function resultList(box, items, onPick, emptyText){
+  box.innerHTML = '';
+  if (!items.length) { box.innerHTML = `<div class="result"><span>${emptyText || '找不到，換個關鍵字試試'}</span></div>`; return; }
+  for (const p of items) {
+    const d = document.createElement('div'); d.className = 'result'; d.innerHTML = '<b></b><span></span>';
+    d.querySelector('b').textContent = p.name; d.querySelector('span').textContent = p.addr;
+    d.onclick = () => onPick(p); box.appendChild(d);
+  }
+}
 let searchTimer;
 async function search(q){
-  const box = $('#results'); box.innerHTML = '';
-  if (!q.trim()) return;
-  try {
-    const { places } = await placesLib.Place.searchByText({ textQuery:q, fields:['displayName','formattedAddress','location','id'], locationBias:map.getBounds() || undefined, language:'zh-TW', maxResultCount:8 });
-    if (!places.length) { box.innerHTML = '<div class="result"><span>找不到，換個關鍵字試試</span></div>'; return; }
-    for (const p of places) {
-      const d = document.createElement('div'); d.className = 'result'; d.innerHTML = '<b></b><span></span>';
-      d.querySelector('b').textContent = p.displayName; d.querySelector('span').textContent = p.formattedAddress || '';
-      d.onclick = () => { pickPlace({ name:p.displayName, addr:p.formattedAddress, lat:p.location.lat(), lng:p.location.lng(), pid:p.id }); box.innerHTML = ''; $('#q').value = ''; };
-      box.appendChild(d);
-    }
-  } catch(e) { console.error(e); box.innerHTML = '<div class="result"><span>搜尋失敗：' + (e.message || e) + '</span></div>'; }
+  const box = $('#results'); box.innerHTML = ''; if (!q.trim()) return;
+  try { resultList(box, await textSearch(q), p => { pickPlace(p); box.innerHTML = ''; $('#q').value = ''; }); }
+  catch(e) { console.error(e); box.innerHTML = '<div class="result"><span>搜尋失敗：' + (e.message || e) + '</span></div>'; }
 }
 $('#q').addEventListener('input', e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => search(e.target.value), 450); });
-$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(searchTimer); search(e.target.value); } if (e.key === 'Escape') { $('#results').innerHTML = ''; if (replacing) cancelReplace(); } });
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(searchTimer); search(e.target.value); } if (e.key === 'Escape') { $('#results').innerHTML = ''; cancelPick(); } });
 document.addEventListener('click', e => { if (!e.target.closest('.search')) $('#results').innerHTML = ''; });
 
 /* ============================================================ 行程操作 */
@@ -330,24 +377,21 @@ function pickPlace(p){
     if (s) { const old = s.name; Object.assign(s, { name:p.name, addr:p.addr || '', lat:p.lat, lng:p.lng, pid:p.pid || '' }); toast(`已把「${old}」換成「${p.name}」`); }
     replacing = null; save(); render(); return;
   }
+  if (inserting) {
+    const { di, index } = inserting; inserting = null; activeDay = di;
+    state.days[di].stops.splice(index, 0, newStop(p)); save(); render(); toast(`已插入 ${dayLabel(di)}：${p.name}`); return;
+  }
   addStop(p);
 }
-function addStop(p, di = activeDay){
-  state.days[di].stops.push({ id:uid(), name:p.name, addr:p.addr || '', lat:p.lat, lng:p.lng, pid:p.pid || '', stay:60, note:p.note || '' });
-  save(); render(); toast(`已加入 ${dayLabel(di)}：${p.name}`);
-}
+const newStop = p => ({ id:uid(), name:p.name, addr:p.addr || '', lat:p.lat, lng:p.lng, pid:p.pid || '', stay:60, note:p.note || '' });
+function addStop(p, di = activeDay){ state.days[di].stops.push(newStop(p)); save(); render(); toast(`已加入 ${dayLabel(di)}：${p.name}`); }
 function removeStop(di, id){ state.days[di].stops = state.days[di].stops.filter(s => s.id !== id); save(); render(); }
-function duplicateStop(di, id){
-  const list = state.days[di].stops, i = list.findIndex(s => s.id === id);
-  list.splice(i + 1, 0, { ...list[i], id:uid() }); save(); render(); toast('已複製一份在下面，拖到想要的位置');
-}
-function startReplace(di, id){ replacing = { di, id }; render(); $('#q').focus(); }
-function cancelReplace(){ replacing = null; render(); }
+function duplicateStop(di, id){ const list = state.days[di].stops, i = list.findIndex(s => s.id === id); list.splice(i + 1, 0, { ...list[i], id:uid() }); save(); render(); toast('已複製一份在下面，拖到想要的位置'); }
+function startReplace(di, id){ inserting = null; replacing = { di, id }; render(); $('#q').focus(); }
+function startInsert(di, index){ replacing = null; inserting = { di, index }; render(); $('#q').focus(); }
+function cancelPick(){ if (replacing || inserting) { replacing = inserting = null; render(); } }
 function addDay(){ state.days.push({ start:'09:00', stops:[] }); activeDay = state.days.length - 1; save(); render(); }
-function removeDay(di){
-  if (state.days.length === 1) state.days[0].stops = []; else state.days.splice(di, 1);
-  activeDay = Math.min(activeDay, state.days.length - 1); save(); render();
-}
+function removeDay(di){ if (state.days.length === 1) state.days[0].stops = []; else state.days.splice(di, 1); activeDay = Math.min(activeDay, state.days.length - 1); save(); render(); }
 
 /* ---------- 車程 ---------- */
 const legKey = (a, b, mode) => `${mode}|${a.lat.toFixed(5)},${a.lng.toFixed(5)}|${b.lat.toFixed(5)},${b.lng.toFixed(5)}`;
@@ -355,62 +399,68 @@ function fmtDur(sec){ const m = Math.round(sec / 60); return m < 60 ? `${m} 分`
 function fmtDist(m){ return m < 1000 ? `${m} 公尺` : `${(m / 1000).toFixed(1)} 公里`; }
 function addMin(hhmm, min){ const [h, m] = hhmm.split(':').map(Number); const t = h * 60 + m + min; return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; }
 const toMin = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+const pathOf = leg => leg.steps.flatMap(st => st.path).map(ll => ({ lat:ll.lat(), lng:ll.lng() }));
 
+// 把一天切成「同交通方式」的連續段，每段一次查完；大眾運輸只能逐段查
 async function routeDay(di){
-  const day = state.days[di], stops = day.stops, mode = state.mode;
-  if (stops.length < 2) { if (di === activeDay && renderer) { renderer.setDirections({ routes:[] }); if (fallbackLine) fallbackLine.setMap(null); } return false; }
-  const missing = [];
-  for (let i = 0; i < stops.length - 1; i++) if (!legCache.has(legKey(stops[i], stops[i + 1], mode))) missing.push(i);
-  if (mode === 'TRANSIT') {
-    for (const i of missing) {
-      try { const r = await dirService.route({ origin:stops[i], destination:stops[i + 1], travelMode:mode, language:'zh-TW' }); const leg = r.routes[0].legs[0]; legCache.set(legKey(stops[i], stops[i + 1], mode), { sec:leg.duration.value, m:leg.distance.value }); }
-      catch(e) { legCache.set(legKey(stops[i], stops[i + 1], mode), { err:true }); }
-    }
-    if (di === activeDay) drawDayPolyline(day, di);
-    return missing.length > 0;
+  const seq = seqOf(di); if (seq.length < 2) return false;
+  let changed = false;
+  const groups = []; // {mode, from, to} 索引範圍（含）
+  for (let i = 0; i < seq.length - 1; i++) {
+    const m = legMode(seq[i]), g = groups[groups.length - 1];
+    if (g && g.mode === m && m !== 'TRANSIT') g.to = i + 1; else groups.push({ mode:m, from:i, to:i + 1 });
   }
-  if (!missing.length && di !== activeDay) return false;
-  try {
-    const r = await dirService.route({ origin:stops[0], destination:stops[stops.length - 1], waypoints:stops.slice(1, -1).map(s => ({ location:s, stopover:true })), travelMode:mode, language:'zh-TW' });
-    r.routes[0].legs.forEach((leg, i) => legCache.set(legKey(stops[i], stops[i + 1], mode), { sec:leg.duration.value, m:leg.distance.value }));
-    if (di === activeDay) { if (fallbackLine) fallbackLine.setMap(null); renderer.setOptions({ polylineOptions:{ strokeColor:dayColor(di), strokeWeight:4, strokeOpacity:.85 } }); renderer.setDirections(r); }
-  } catch(e) {
-    console.warn('route fail', e); missing.forEach(i => legCache.set(legKey(stops[i], stops[i + 1], mode), { err:true }));
-    if (di === activeDay) drawDayPolyline(day, di);
+  for (const g of groups) {
+    const pts = seq.slice(g.from, g.to + 1);
+    const missing = pts.slice(0, -1).some((p, i) => !legCache.has(legKey(p, pts[i + 1], g.mode)));
+    if (!missing) continue;
+    changed = true;
+    try {
+      const r = await dirService.route({ origin:pts[0], destination:pts[pts.length - 1], waypoints:pts.slice(1, -1).map(s => ({ location:s, stopover:true })), travelMode:g.mode, language:'zh-TW' });
+      r.routes[0].legs.forEach((leg, i) => legCache.set(legKey(pts[i], pts[i + 1], g.mode), { sec:leg.duration.value, m:leg.distance.value, path:pathOf(leg) }));
+    } catch(e) { console.warn('route fail', g.mode, e.code || e); pts.slice(0, -1).forEach((p, i) => legCache.set(legKey(p, pts[i + 1], g.mode), { err:true })); }
   }
-  return missing.length > 0;
+  return changed;
 }
-function drawDayPolyline(day, di){
-  renderer.setDirections({ routes:[] }); if (fallbackLine) fallbackLine.setMap(null);
-  fallbackLine = new google.maps.Polyline({ map, path:day.stops.map(s => ({ lat:s.lat, lng:s.lng })), strokeColor:dayColor(di), strokeOpacity:0, icons:[{ icon:{ path:'M 0,-1 0,1', strokeOpacity:.7, scale:3 }, offset:'0', repeat:'12px' }] });
+function drawRoutes(){
+  lines.forEach(l => l.setMap(null)); lines = [];
+  const seq = seqOf(activeDay), col = dayColor(activeDay);
+  for (let i = 0; i < seq.length - 1; i++) {
+    const m = legMode(seq[i]), c = legCache.get(legKey(seq[i], seq[i + 1], m));
+    const dashed = m === 'TRANSIT' || !c || c.err;
+    const path = c && c.path ? c.path : [{ lat:seq[i].lat, lng:seq[i].lng }, { lat:seq[i + 1].lat, lng:seq[i + 1].lng }];
+    lines.push(new google.maps.Polyline({ map, path, strokeColor:col, strokeOpacity:dashed ? 0 : .85, strokeWeight:m === 'WALKING' ? 3 : 4,
+      icons:dashed ? [{ icon:{ path:'M 0,-1 0,1', strokeOpacity:.8, strokeColor:col, scale:3 }, offset:'0', repeat:'12px' }] : [] }));
+  }
 }
 
 /* ---------- 每天統計 + 負荷指數 ---------- */
-function dayStats(day){
-  let clock = day.start || '09:00', drive = 0, dist = 0, pending = false, maxLeg = 0;
+function dayStats(di){
+  const day = state.days[di], seq = seqOf(di);
+  let clock = day.start || '09:00', drive = 0, dist = 0, pending = false, maxLeg = 0, n = 0;
   const rows = [];
-  day.stops.forEach((s, i) => {
-    rows.push({ type:'stop', s, i, arrive:clock });
+  seq.forEach((s, i) => {
+    if (!s.fixed) n++;
+    rows.push({ type:'stop', s, i, n, arrive:clock });
     clock = addMin(clock, +s.stay || 0);
-    if (i < day.stops.length - 1) {
-      const c = legCache.get(legKey(s, day.stops[i + 1], state.mode));
+    if (i < seq.length - 1) {
+      const m = legMode(s), c = legCache.get(legKey(s, seq[i + 1], m));
       if (c && !c.err) { drive += c.sec; dist += c.m; maxLeg = Math.max(maxLeg, c.sec); clock = addMin(clock, Math.round(c.sec / 60)); }
       else if (!c) pending = true;
-      rows.push({ type:'leg', c, a:s, b:day.stops[i + 1] });
+      rows.push({ type:'leg', c, a:s, b:seq[i + 1], mode:m, custom:!!s.modeTo, insertIndex:(s.fixed === 'from') ? 0 : day.stops.findIndex(x => x.id === s.id) + 1 });
     }
   });
-  const endMin = toMin(day.start || '09:00') + day.stops.reduce((a, s) => a + (+s.stay || 0), 0) + Math.round(drive / 60);
-  // 停留 0 分的（飯店、機場這種純起終點）不算進「地點數」
-  return { rows, drive, dist, pending, maxLeg, end:clock, endMin, n:day.stops.length, nReal:day.stops.filter(s => +s.stay > 0).length };
+  const endMin = toMin(day.start || '09:00') + seq.reduce((a, s) => a + (+s.stay || 0), 0) + Math.round(drive / 60);
+  return { rows, drive, dist, pending, maxLeg, end:clock, endMin, n, nReal:day.stops.filter(s => +s.stay > 0).length, seq };
 }
 function loadLevel(st){
   const warns = []; let lv = 0;
   const dm = st.drive / 60, ml = st.maxLeg / 60, km = st.dist / 1000;
   const push = (l, t) => { warns.push(t); lv = Math.max(lv, l); };
   if (st.n === 0) return { lv:0, warns:[], label:'' };
-  if (dm > 240) push(3, `開車 ${fmtDur(st.drive)}，超過 4 小時`); else if (dm > 180) push(2, `開車 ${fmtDur(st.drive)}，超過 3 小時`); else if (dm > 120) push(1, `開車 ${fmtDur(st.drive)}`);
+  if (dm > 240) push(3, `移動 ${fmtDur(st.drive)}，超過 4 小時`); else if (dm > 180) push(2, `移動 ${fmtDur(st.drive)}，超過 3 小時`); else if (dm > 120) push(1, `移動 ${fmtDur(st.drive)}`);
   if (km > 250) push(3, `距離 ${km.toFixed(0)} 公里`); else if (km > 150) push(2, `距離 ${km.toFixed(0)} 公里`);
-  if (ml > 120) push(3, `單段車程 ${fmtDur(st.maxLeg)}`); else if (ml > 90) push(2, `單段車程 ${fmtDur(st.maxLeg)}`);
+  if (ml > 120) push(3, `單段 ${fmtDur(st.maxLeg)}`); else if (ml > 90) push(2, `單段 ${fmtDur(st.maxLeg)}`);
   if (st.nReal > 8) push(3, `${st.nReal} 個地點太多`); else if (st.nReal > 6) push(2, `${st.nReal} 個地點偏多`); else if (st.nReal > 4) push(1, `${st.nReal} 個地點`);
   if (st.endMin > 22 * 60) push(3, `約 ${st.end} 才結束`); else if (st.endMin > 21 * 60) push(2, `約 ${st.end} 才結束`); else if (st.endMin > 20 * 60) push(1, `約 ${st.end} 結束`);
   return { lv, warns, label:['輕鬆','適中','偏滿','爆量'][lv] };
@@ -426,15 +476,18 @@ function render(){
   $('#mode').value = state.mode; $('#startDate').value = state.startDate || '';
   document.body.classList.toggle('list', view === 'list');
   $('#vMap').classList.toggle('on', view === 'map'); $('#vList').classList.toggle('on', view === 'list');
-  $('#searchBox').classList.toggle('replacing', !!replacing);
-  const hint = $('#hint'); hint.className = 'hint' + (replacing ? ' replace' : '');
-  if (replacing) { const s = state.days[replacing.di].stops.find(x => x.id === replacing.id); hint.innerHTML = `搜尋新地點來取代「${s ? s.name : ''}」 <button id="cancelRep">取消</button>`; $('#cancelRep').onclick = cancelReplace; }
-  else hint.textContent = view === 'list' ? '清單模式：點「地圖」切回可拖拉的行程卡。' : '搜尋結果會加到目前選取的那一天。拖拉卡片可以排序或搬到別天。';
+  $('#searchBox').className = 'search' + (replacing ? ' replacing' : inserting ? ' inserting' : '');
+  const hint = $('#hint'); hint.className = 'hint' + (replacing ? ' replace' : inserting ? ' insert' : '');
+  if (replacing) { const s = state.days[replacing.di].stops.find(x => x.id === replacing.id); hint.innerHTML = `搜尋新地點來取代「${s ? s.name : ''}」 <button id="cancelPick">取消</button>`; }
+  else if (inserting) { hint.innerHTML = `搜尋地點，會插入 ${dayLabel(inserting.di)} 的第 ${inserting.index + 1} 站 <button id="cancelPick">取消</button>`; }
+  else hint.textContent = view === 'list' ? '清單模式：點「地圖」切回可拖拉的行程卡。' : '搜尋結果會加到目前選取那天的最後。段落上的 ＋ 可以插在中間。';
+  if ($('#cancelPick')) $('#cancelPick').onclick = cancelPick;
 
   const wrap = $('#days'); wrap.innerHTML = '';
   let anyPending = false;
   state.days.forEach((day, di) => {
-    const st = dayStats(day), ld = loadLevel(st); if (st.pending) anyPending = true;
+    const st = dayStats(di), ld = loadLevel(st); if (st.pending) anyPending = true;
+    const hotel = hotelOf(di), isLast = di === state.days.length - 1;
     const el = document.createElement('section');
     el.className = 'day' + (di === activeDay ? ' active' : ''); el.style.setProperty('--dc', dayColor(di));
     el.innerHTML = `
@@ -442,59 +495,60 @@ function render(){
         <span class="day-dot"></span>
         <span class="day-name" contenteditable="true" spellcheck="false"></span>
         ${ld.label ? `<span class="load l${ld.lv}" title="${ld.warns.join('、')}">${['🟢','🟡','🟠','🔴'][ld.lv]} ${ld.label}</span>` : ''}
+        <button class="hotelBtn" title="${isLast ? '最後一天：只當起點' : hotel ? '今晚住：' + hotel.name : '設定今晚住哪'}">🏨${hotel && !isLast ? '' : '<span style="color:#b5b3ad">?</span>'}</button>
         <input type="time" value="${day.start || '09:00'}" title="出發時間">
       </div>
       <div class="day-summary">
         <span>📍 ${st.n} 個地點</span>
-        ${st.n > 1 ? `<span>${modeIcon()} 移動 ${st.pending ? '計算中…' : fmtDur(st.drive)}</span><span>📏 ${fmtDist(st.dist)}</span><span>🏁 約 ${st.end} 結束</span>` : ''}
+        ${st.seq.length > 1 ? `<span>⏱ 移動 ${st.pending ? '計算中…' : fmtDur(st.drive)}</span><span>📏 ${fmtDist(st.dist)}</span><span>🏁 約 ${st.end} 結束</span>` : ''}
       </div>
       ${ld.lv >= 2 ? `<div class="day-warn l${ld.lv}">⚠ ${ld.warns.join('、')}</div>` : ''}
       ${view === 'list' ? `<div class="tl"></div>` : `<div class="stops" data-day="${di}"></div>`}
       <div class="day-foot">
-        ${st.n > 1 ? `<a href="${gmapsUrl(day)}" target="_blank" rel="noopener"><button>在 Google Maps 開啟</button></a>` : ''}
+        ${st.seq.length > 1 ? `<a href="${gmapsUrl(st.seq)}" target="_blank" rel="noopener"><button>在 Google Maps 開整天</button></a>` : ''}
         <button class="ghost" data-del-day>${state.days.length === 1 ? '清空這天' : '刪除這天'}</button>
       </div>`;
     const nameEl = el.querySelector('.day-name'); nameEl.textContent = dayLabel(di);
-    nameEl.addEventListener('blur', () => { const v = nameEl.textContent.trim(); day.name = (v && v !== dayLabel(di)) ? v : ''; if (!v) delete day.name; save(); render(); });
+    nameEl.addEventListener('blur', () => { const v = nameEl.textContent.trim(); if (v && v !== dayLabel(di)) day.name = v; else delete day.name; save(); render(); });
     nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); } });
     nameEl.addEventListener('click', e => e.stopPropagation());
     el.querySelector('.day-head').addEventListener('click', () => { if (activeDay !== di) { activeDay = di; render(); } });
+    el.querySelector('.hotelBtn').addEventListener('click', e => { e.stopPropagation(); openHotel(di); });
     el.querySelector('input[type=time]').addEventListener('click', e => e.stopPropagation());
     el.querySelector('input[type=time]').addEventListener('change', e => { day.start = e.target.value; save(); render(); });
     el.querySelector('[data-del-day]').addEventListener('click', () => { if (confirm(`確定${state.days.length === 1 ? '清空' : '刪除'}「${dayLabel(di)}」？`)) removeDay(di); });
 
     if (view === 'list') {
       const tl = el.querySelector('.tl');
-      if (!st.n) tl.innerHTML = '<div class="empty" style="grid-column:1/-1">這天還沒有行程</div>';
+      if (!st.seq.length) tl.innerHTML = '<div class="empty" style="grid-column:1/-1">這天還沒有行程</div>';
       st.rows.forEach(r => {
         if (r.type === 'stop') {
           const t = document.createElement('div'); t.className = 't'; t.textContent = r.arrive; tl.appendChild(t);
           const p = document.createElement('div'); p.className = 'p'; p.innerHTML = '<b></b><small></small>';
-          p.querySelector('b').textContent = `${r.i + 1}. ${r.s.name}`;
+          p.querySelector('b').textContent = r.s.fixed ? `🏨 ${r.s.name}${r.s.fixed === 'from' ? '（出發）' : '（回飯店）'}` : `${r.n}. ${r.s.name}`;
           p.querySelector('small').textContent = [r.s.stay ? `停留 ${r.s.stay} 分` : '', r.s.note].filter(Boolean).join(' · ');
           tl.appendChild(p);
         } else {
           const l = document.createElement('div'); l.className = 'lg';
-          l.textContent = !r.c ? `${modeIcon()} 計算中…` : r.c.err ? `${modeIcon()} 查不到路線` : `${modeIcon()} ${fmtDur(r.c.sec)} · ${fmtDist(r.c.m)}`;
+          l.textContent = !r.c ? `${MODES[r.mode]} 計算中…` : r.c.err ? `${MODES[r.mode]} 查不到路線` : `${MODES[r.mode]} ${fmtDur(r.c.sec)} · ${fmtDist(r.c.m)}`;
           tl.appendChild(l);
         }
       });
     } else {
       const list = el.querySelector('.stops');
-      if (!st.n) list.innerHTML = `<div class="empty">${di === activeDay ? '這天還沒有行程，用上面的搜尋加入地點' : '點這天的標題，再搜尋加入地點'}</div>`;
+      if (!st.seq.length) list.innerHTML = `<div class="empty">這天還沒有行程，${di === activeDay ? '用上面的搜尋加入地點' : '點這天的標題再搜尋'}</div>`;
+      else if (!day.stops.length && st.seq.length === 1) { /* 只有飯店 */ }
       st.rows.forEach(r => {
         if (r.type === 'stop') list.appendChild(stopEl(day, di, r));
-        else {
-          const d = document.createElement('div'); d.className = 'leg' + (r.c && r.c.sec > 90 * 60 ? ' long' : '');
-          if (!r.c) d.innerHTML = `${modeIcon()} 計算中…`;
-          else if (r.c.err) d.innerHTML = `${modeIcon()} 查不到路線`;
-          else d.innerHTML = `${modeIcon()} <b>${fmtDur(r.c.sec)}</b> · ${fmtDist(r.c.m)} <a href="${gmapsLeg(r.a, r.b)}" target="_blank" rel="noopener">導航 ↗</a>`;
-          list.appendChild(d);
-        }
+        else list.appendChild(legEl(day, di, r));
       });
+      if (!day.stops.length && st.seq.length) {  // 只有飯店卡：給一個插入點
+        const e = document.createElement('div'); e.className = 'empty'; e.innerHTML = `這天還沒有行程 <button class="ins" style="padding:2px 8px;font-size:12px">＋ 插入</button>`;
+        e.querySelector('button').onclick = () => startInsert(di, 0); list.appendChild(e);
+      }
       new Sortable(list, {
-        group:'stops', animation:160, draggable:'.stop', delay:120, delayOnTouchOnly:true,
-        filter:'input,textarea,button,[contenteditable]', preventOnFilter:false,
+        group:'stops', animation:160, draggable:'.stop:not(.fixed)', delay:120, delayOnTouchOnly:true,
+        filter:'input,textarea,button,select,a,[contenteditable]', preventOnFilter:false,
         onEnd: evt => {
           const from = +evt.from.dataset.day, to = +evt.to.dataset.day;
           const [moved] = state.days[from].stops.splice(evt.oldDraggableIndex, 1);
@@ -507,42 +561,68 @@ function render(){
   });
 
   if (map) {
-    drawMarkers();
+    drawMarkers(); drawRoutes();
     Promise.all(state.days.map((_, di) => routeDay(di))).then(changed => { if (changed.some(Boolean) || anyPending) requestAnimationFrame(render); });
   }
   rendering = false;
   if (pendingRender) { pendingRender = false; requestAnimationFrame(render); }
 }
 
+function legEl(day, di, r){
+  const d = document.createElement('div'); d.className = 'leg' + (r.c && r.c.sec > 90 * 60 ? ' long' : '');
+  const sel = document.createElement('select'); sel.className = r.custom ? 'custom' : ''; sel.title = '這段的交通方式';
+  for (const [k, v] of Object.entries(MODES)) { const o = document.createElement('option'); o.value = k; o.textContent = v; if (k === r.mode) o.selected = true; sel.appendChild(o); }
+  sel.addEventListener('change', e => {
+    const v = e.target.value === state.mode ? undefined : e.target.value;
+    if (r.a.fixed === 'from') { if (v) day.hotelModeTo = v; else delete day.hotelModeTo; }
+    else { const s = day.stops.find(x => x.id === r.a.id); if (s) { if (v) s.modeTo = v; else delete s.modeTo; } }
+    save(); render();
+  });
+  d.appendChild(sel);
+  const txt = document.createElement('span');
+  txt.innerHTML = !r.c ? '計算中…' : r.c.err ? '查不到路線' : `<b>${fmtDur(r.c.sec)}</b> · ${fmtDist(r.c.m)}`;
+  d.appendChild(txt);
+  const ins = document.createElement('button'); ins.className = 'ins' + (inserting && inserting.di === di && inserting.index === r.insertIndex ? ' on' : ''); ins.textContent = '＋'; ins.title = '在這裡插入行程';
+  ins.onclick = () => startInsert(di, r.insertIndex); d.appendChild(ins);
+  return d;
+}
+
 function stopEl(day, di, r){
-  const s = r.s;
-  const el = document.createElement('div'); el.className = 'stop' + (replacing && replacing.id === s.id ? ' replacing' : ''); el.dataset.id = s.id;
+  const s = r.s, fixed = !!s.fixed;
+  const el = document.createElement('div'); el.className = 'stop' + (fixed ? ' fixed' : '') + (replacing && replacing.id === s.id ? ' replacing' : ''); el.dataset.id = s.id;
   el.innerHTML = `
-    <div class="num">${r.i + 1}</div>
+    <div class="num">${fixed ? '🏨' : r.n}</div>
     <div class="stop-body">
-      <div class="stop-name"></div>
+      <div class="stop-name" ${fixed ? '' : 'contenteditable="true" spellcheck="false" title="點一下可以改名"'}></div>
       <div class="stop-addr"></div>
       <div class="stop-meta">
-        <span class="arrive">${r.arrive} 抵達</span>
-        <span>停留 <input type="number" min="0" step="5" value="${s.stay}"> 分</span>
+        <span class="arrive">${r.arrive} ${s.fixed === 'from' ? '出發' : '抵達'}</span>
+        ${fixed ? `<span>${s.fixed === 'from' ? '從飯店出發' : '回飯店'}</span>` : `<span>停留 <input type="text" inputmode="numeric" pattern="[0-9]*" value="${s.stay}"> 分</span>`}
+        <a class="nav" href="${navUrl(s, r.mode)}" target="_blank" rel="noopener" title="從目前位置導航到這裡">導航 ↗</a>
       </div>
-      <input class="stop-note" placeholder="備註：訂位、門票、想吃什麼…">
+      ${fixed ? '' : '<input class="stop-note" placeholder="備註：訂位、門票、想吃什麼…">'}
     </div>
-    <div class="stop-actions">
+    ${fixed ? '<div></div>' : `<div class="stop-actions">
       <button class="del" title="移除">✕</button>
       <button class="dup" title="複製一份">⧉</button>
       <button class="rep" title="換成別的地點">⇄</button>
-    </div>`;
-  el.querySelector('.stop-name').textContent = s.name;
+    </div>`}`;
+  const nameEl = el.querySelector('.stop-name'); nameEl.textContent = s.name;
   el.querySelector('.stop-addr').textContent = s.addr;
-  el.querySelector('.stop-note').value = s.note || '';
-  el.querySelector('.stop-note').addEventListener('change', e => { s.note = e.target.value; save(); });
-  el.querySelector('input[type=number]').addEventListener('change', e => { s.stay = +e.target.value || 0; save(); render(); });
-  el.querySelector('.del').addEventListener('click', () => removeStop(di, s.id));
-  el.querySelector('.dup').addEventListener('click', () => duplicateStop(di, s.id));
-  el.querySelector('.rep').addEventListener('click', () => startReplace(di, s.id));
+  if (!fixed) {
+    nameEl.addEventListener('blur', () => { const v = nameEl.textContent.trim(); if (v && v !== s.name) { s.name = v; save(); render(); } else nameEl.textContent = s.name; });
+    nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); } });
+    el.querySelector('.stop-note').value = s.note || '';
+    el.querySelector('.stop-note').addEventListener('change', e => { s.note = e.target.value; save(); });
+    const stayIn = el.querySelector('.stop-meta input');
+    stayIn.addEventListener('change', e => { s.stay = parseInt(e.target.value, 10) || 0; save(); render(); });
+    stayIn.addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+    el.querySelector('.del').addEventListener('click', () => removeStop(di, s.id));
+    el.querySelector('.dup').addEventListener('click', () => duplicateStop(di, s.id));
+    el.querySelector('.rep').addEventListener('click', () => startReplace(di, s.id));
+  }
   el.addEventListener('click', e => {
-    if (e.target.closest('input,button')) return;
+    if (e.target.closest('input,button,a,[contenteditable]')) return;
     activeDay = di; if (map) { map.panTo({ lat:s.lat, lng:s.lng }); if (map.getZoom() < 14) map.setZoom(14); }
     if (!el.closest('.day').classList.contains('active')) render();
   });
@@ -552,27 +632,55 @@ function stopEl(day, di, r){
 function drawMarkers(){
   markers.forEach(m => m.setMap(null)); markers = [];
   const bounds = new google.maps.LatLngBounds(); let any = false;
-  state.days.forEach((day, di) => day.stops.forEach((s, i) => {
-    const active = di === activeDay;
-    if (!active && !showAll) {
-      const m = new google.maps.Marker({ map, position:{ lat:s.lat, lng:s.lng }, title:`${dayLabel(di)} ${i + 1}. ${s.name}`, icon:{ path:google.maps.SymbolPath.CIRCLE, scale:5, fillColor:'#9a9a94', fillOpacity:.8, strokeColor:'#fff', strokeWeight:1.5 }, zIndex:1 });
-      m.addListener('click', () => { activeDay = di; render(); }); markers.push(m); return;
-    }
-    const m = new google.maps.Marker({
-      map, position:{ lat:s.lat, lng:s.lng }, title:`${dayLabel(di)} ${i + 1}. ${s.name}`,
-      label:{ text:String(i + 1), color:'#fff', fontSize:'12px', fontWeight:'700' },
-      icon:{ path:google.maps.SymbolPath.CIRCLE, scale:active ? 13 : 10, fillColor:dayColor(di), fillOpacity:active ? 1 : .6, strokeColor:'#fff', strokeWeight:2 }, zIndex:active ? 10 : 2,
+  state.days.forEach((day, di) => {
+    const active = di === activeDay, seq = seqOf(di); let n = 0;
+    seq.forEach(s => {
+      if (!s.fixed) n++;
+      const isHotel = !!s.fixed, title = `${dayLabel(di)} ${isHotel ? '🏨' : n + '.'} ${s.name}`;
+      let m;
+      if (!active && !showAll) m = new google.maps.Marker({ map, position:{ lat:s.lat, lng:s.lng }, title, icon:{ path:google.maps.SymbolPath.CIRCLE, scale:5, fillColor:'#9a9a94', fillOpacity:.8, strokeColor:'#fff', strokeWeight:1.5 }, zIndex:1 });
+      else if (isHotel) m = new google.maps.Marker({ map, position:{ lat:s.lat, lng:s.lng }, title, icon:{ path:'M -8,-8 L 8,-8 L 8,8 L -8,8 Z', scale:1, fillColor:'#fff', fillOpacity:1, strokeColor:dayColor(di), strokeWeight:2.5 }, label:{ text:'🏨', fontSize:'11px' }, zIndex:active ? 9 : 2 });
+      else m = new google.maps.Marker({ map, position:{ lat:s.lat, lng:s.lng }, title, label:{ text:String(n), color:'#fff', fontSize:'12px', fontWeight:'700' }, icon:{ path:google.maps.SymbolPath.CIRCLE, scale:active ? 13 : 10, fillColor:dayColor(di), fillOpacity:active ? 1 : .6, strokeColor:'#fff', strokeWeight:2 }, zIndex:active ? 10 : 2 });
+      m.addListener('click', () => { activeDay = di; render(); }); markers.push(m);
+      if (active) { bounds.extend(m.getPosition()); any = true; }
     });
-    m.addListener('click', () => { activeDay = di; render(); }); markers.push(m);
-    if (active) { bounds.extend(m.getPosition()); any = true; }
-  }));
+  });
   if (any && map._lastDay !== activeDay) { map.fitBounds(bounds, 60); map._lastDay = activeDay; }
 }
 
-function modeIcon(){ return { DRIVING:'🚗', TRANSIT:'🚌', WALKING:'🚶' }[state.mode]; }
-const gmMode = () => ({ DRIVING:'driving', TRANSIT:'transit', WALKING:'walking' })[state.mode];
-function gmapsUrl(day){ const s = day.stops, p = x => `${x.lat},${x.lng}`; return `https://www.google.com/maps/dir/?api=1&origin=${p(s[0])}&destination=${p(s[s.length - 1])}&waypoints=${s.slice(1, -1).map(p).join('|')}&travelmode=${gmMode()}`; }
-function gmapsLeg(a, b){ return `https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a.lng}&destination=${b.lat},${b.lng}&travelmode=${gmMode()}`; }
+const gmMode = m => ({ DRIVING:'driving', TRANSIT:'transit', WALKING:'walking' })[m || state.mode];
+function gmapsUrl(seq){ const p = x => `${x.lat},${x.lng}`; return `https://www.google.com/maps/dir/?api=1&origin=${p(seq[0])}&destination=${p(seq[seq.length - 1])}&waypoints=${seq.slice(1, -1).map(p).join('|')}&travelmode=${gmMode()}`; }
+// 導航：不給 origin，Google Maps 會用目前位置
+function navUrl(s, mode){ return `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}${s.pid ? '&destination_place_id=' + s.pid : ''}&travelmode=${gmMode(mode)}`; }
+
+/* ============================================================ 住宿 */
+function openHotel(di){
+  hotelFor = di; const d = state.days[di], h = hotelOf(di), isLast = di === state.days.length - 1;
+  $('#hDayName').textContent = dayLabel(di);
+  $('#hCur').innerHTML = isLast
+    ? `最後一天不會有「回飯店」。這天的起點是前一晚的住宿：<b>${(di > 0 && hotelOf(di - 1)) ? hotelOf(di - 1).name : '沒有設定'}</b>`
+    : h ? `今晚住：<b>${h.name}</b>${hotelInherited(di) ? '<br><small>（跟前一天一樣）</small>' : ''}` : '今晚還沒設定住宿';
+  $('#hQ').value = ''; $('#hRes').innerHTML = '';
+  $('#hSame').hidden = di === 0; $('#hNone').hidden = isLast;
+  $('#hotelDlg').showModal(); $('#hQ').focus();
+}
+function setHotel(h){
+  const di = hotelFor, applyFrom = document.querySelector('input[name=hApply]:checked').value === 'from';
+  const before = di > 0 ? hotelOf(di - 1) : null;
+  state.days[di].hotel = h;
+  // 「之後都住這」：後面沒特別設定的天會自動繼承，不用動。「只有這天」：隔天要接回原本的住宿
+  if (!applyFrom && di + 1 < state.days.length && state.days[di + 1].hotel === undefined) state.days[di + 1].hotel = before;
+  save(); render(); $('#hotelDlg').close(); toast(h ? `${dayLabel(di)} 住 ${h.name}` : `${dayLabel(di)} 不回飯店`);
+}
+let hTimer;
+async function hotelSearch(){
+  const q = $('#hQ').value.trim(); if (!q) return; const box = $('#hRes'); box.innerHTML = '<div class="result"><span>搜尋中…</span></div>';
+  try { resultList(box, await textSearch(q + ' hotel', 6), p => setHotel({ name:p.name, addr:p.addr, lat:p.lat, lng:p.lng, pid:p.pid })); } catch(e) { box.innerHTML = '<div class="result"><span>搜尋失敗</span></div>'; }
+}
+$('#hQ').addEventListener('input', () => { clearTimeout(hTimer); hTimer = setTimeout(hotelSearch, 500); });
+$('#hQ').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(hTimer); hotelSearch(); } });
+$('#hSame').addEventListener('click', () => { delete state.days[hotelFor].hotel; save(); render(); $('#hotelDlg').close(); });
+$('#hNone').addEventListener('click', () => setHotel(null));
 
 /* ============================================================ 航班 */
 async function lookupFlight(no, date, key){
@@ -598,7 +706,7 @@ $('#fLookup').addEventListener('click', async () => {
   $('#fRes').innerHTML = '<div class="flight-res">查詢中…</div>';
   try {
     const fl = await lookupFlight(no, date, key);
-    if (!fl.length) { $('#fRes').innerHTML = '<div class="flight-res">查不到這班，確認一下航班號和日期（AeroDataBox 只能查未來約 1 年、過去 7 天內）</div>'; return; }
+    if (!fl.length) { $('#fRes').innerHTML = '<div class="flight-res">查不到這班，確認一下航班號和日期（只能查未來約 1 年、過去 7 天內）</div>'; return; }
     const f = fl[0], dep = f.departure || {}, arr = f.arrival || {};
     const side = a => { const ap = a.airport || {}; return { ap:ap.shortName || ap.name || ap.iata || '?', full:ap.name || '', iata:ap.iata, lat:ap.location && ap.location.lat, lng:ap.location && ap.location.lon, t:lt(a.scheduledTime), term:a.terminal || '' }; };
     flightHit = { no:(f.number || no).replace(/\s+/g, ''), dep:side(dep), arr:side(arr), airline:f.airline && f.airline.name, status:f.status };
@@ -607,7 +715,6 @@ $('#fLookup').addEventListener('click', async () => {
     $('#fApplyArr').hidden = !flightHit.arr.t; $('#fApplyDep').hidden = !flightHit.dep.t;
   } catch(e) { $('#fRes').innerHTML = `<div class="flight-res">${e.message}</div>`; if (/40[13]|429/.test(e.message)) $('#fKeyWrap').hidden = false; }
 });
-// 機場座標：優先用 AeroDataBox 回傳的，沒有再問 Google
 async function airportPlace(s){
   try { const { places } = await placesLib.Place.searchByText({ textQuery:`${s.full || s.ap} ${s.iata || ''} airport`, fields:['displayName','formattedAddress','location','id'], language:'zh-TW', maxResultCount:1, ...(s.lat ? { locationBias:{ center:{ lat:s.lat, lng:s.lng }, radius:20000 } } : {}) }); const p = places[0]; if (p) return { name:p.displayName, addr:p.formattedAddress, lat:p.location.lat(), lng:p.location.lng(), pid:p.id }; } catch(e){}
   if (s.lat) return { name:`${s.ap} 機場${s.iata ? ' (' + s.iata + ')' : ''}`, addr:'', lat:s.lat, lng:s.lng, pid:'' };
@@ -625,7 +732,7 @@ $('#fApplyDep').addEventListener('click', async () => {
   if (ap) d.stops.push({ id:uid(), ...ap, stay:0, note:`${flightHit.no} ${flightHit.dep.t} 起飛${flightHit.dep.term ? ' ' + flightHit.dep.term + ' 航廈' : ''}，建議 ${addMin(flightHit.dep.t, -120)} 前到機場` });
   save(); render(); $('#flightDlg').close();
 });
-$('#btnKey').addEventListener('click', () => { const k = prompt('AeroDataBox 的 RapidAPI Key（留空清除）', localStorage.getItem(RK) || ''); if (k === null) return; if (k.trim()) localStorage.setItem(RK, k.trim()); else localStorage.removeItem(RK); $('#menuDlg').close(); toast('已更新'); });
+$('#btnKey').addEventListener('click', () => { const k = prompt('AeroDataBox 的 RapidAPI Key（留空清除，改用內建）', localStorage.getItem(RK) || ''); if (k === null) return; if (k.trim()) localStorage.setItem(RK, k.trim()); else localStorage.removeItem(RK); $('#menuDlg').close(); toast('已更新'); });
 
 /* ============================================================ 工具列 */
 $('#tripTitle').addEventListener('input', e => { state.title = e.target.value; save(); document.title = (state.title || '旅程規劃') + ' · 旅程規劃'; });
@@ -647,7 +754,7 @@ $('#btnImport').addEventListener('click', () => $('#fileIn').click());
 $('#fileIn').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { const s = JSON.parse(await f.text()); if (!s.days) throw 0; state = s; activeDay = 0; save(); render(); $('#menuDlg').close(); toast('已匯入'); } catch { toast('這個檔案不是行程備份'); } });
 $('#btnClear').addEventListener('click', () => { if (confirm('確定清空整份行程？無法復原。')) { state = { title:'', mode:'DRIVING', startDate:'', days:[{ start:'09:00', stops:[] }] }; activeDay = 0; legCache.clear(); save(); render(); $('#menuDlg').close(); history.replaceState(null, '', location.pathname); } });
 
-/* ---------- 拖拉分隔線：手機調地圖高度、電腦調側欄寬度 ---------- */
+/* ---------- 拖拉分隔線 ---------- */
 (() => {
   const dv = $('#divider'), root = document.documentElement, isMobile = () => matchMedia('(max-width:820px)').matches;
   try { const h = localStorage.getItem('tp-mapH'); if (h) root.style.setProperty('--mapH', h); const w = localStorage.getItem('tp-sbW'); if (w) root.style.setProperty('--sidebar', w); } catch(e){}
