@@ -93,7 +93,7 @@
   .stop-meta input{font:inherit;font-size:12px;width:52px;border:1px solid var(--line);border-radius:6px;padding:2px 5px;text-align:right}
   .stop-note{font-size:12px;line-height:1.45;margin-top:5px;padding:4px 8px;border-radius:6px;background:#faf9f7;color:var(--ink);cursor:pointer;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;word-break:break-word}
   .stop-note:hover{background:#f0efeb}
-  .stop-note.empty{color:#b5b3ad;background:transparent;padding-left:0;font-size:11.5px}
+  .stop-note.blank{color:#b5b3ad;background:transparent;padding-left:0;font-size:11.5px}
   #noteDlg textarea{width:100%;min-height:140px;font:inherit;font-size:15px;line-height:1.5;border:1px solid var(--line);border-radius:10px;padding:10px;resize:vertical}
   .stop-actions{display:flex;flex-direction:column;gap:0}
   .stop-actions button{padding:3px 6px;font-size:12px;border-color:transparent;color:var(--muted);background:transparent}
@@ -789,7 +789,7 @@ function stopEl(day, di, r){
   if (!fixed) {
     nameEl.addEventListener('blur', () => { const v = nameEl.textContent.trim(); if (v && v !== s.name) { s.name = v; save(); render(); } else nameEl.textContent = s.name; });
     nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); } });
-    const noteEl = el.querySelector('.stop-note'); noteEl.textContent = s.note || '✎ 備註…'; noteEl.classList.toggle('empty', !s.note);
+    const noteEl = el.querySelector('.stop-note'); noteEl.textContent = s.note || '✎ 備註…'; noteEl.classList.toggle('blank', !s.note);
     noteEl.addEventListener('click', e => { e.stopPropagation(); openNote(s); });
     const stayIn = el.querySelector('.stop-meta input');
     stayIn.addEventListener('change', e => { s.stay = parseInt(e.target.value, 10) || 0; save(); render(); });
