@@ -131,11 +131,12 @@
   .pill .pill-add{color:var(--accent);font-weight:700}
   .pool-list .empty{width:100%}
 
-  /* 卡片右邊一直行：⋯ 和 🧭 同尺寸對齊 */
+  /* 卡片右邊一直行：⋯ 和地標導航鈕同尺寸對齊 */
   .stop-actions{display:flex;flex-direction:column;gap:6px;align-items:stretch}
   .stop-actions .more,.stop-actions .navbtn{width:36px;height:36px;padding:0;display:grid;place-items:center;font-size:18px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--muted);text-decoration:none;line-height:1}
   .stop-actions .more:hover{background:#f3f2ee;color:var(--ink)}
-  .stop-actions .navbtn{border-color:#d4e3fb;background:#f3f7fd;font-size:16px}
+  .stop-actions .navbtn{border-color:#d4e3fb;background:#f3f7fd;color:var(--accent)}
+  .sheet-item .ic .pin{color:var(--accent);vertical-align:middle}
   .stop-actions .navbtn:hover{background:#e8f0fe}
   .stop.fixed .stop-actions{justify-content:center}
 
@@ -768,7 +769,7 @@ function stopEl(day, di, r){
     </div>
     <div class="stop-actions">
       ${fixed ? '' : '<button class="more" title="更多">⋯</button>'}
-      <a class="navbtn" href="${navUrl(s, r.mode)}" target="_blank" rel="noopener" title="從目前位置導航到這裡">🧭</a>
+      <a class="navbtn" href="${navUrl(s, r.mode)}" target="_blank" rel="noopener" title="從目前位置導航到這裡"><svg class="pin" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" fill="currentColor"/></svg></a>
     </div>`;
   const nameEl = el.querySelector('.stop-name'); nameEl.textContent = s.name;
   el.querySelector('.stop-addr').textContent = s.addr;
@@ -894,7 +895,7 @@ function settlementEl(){
 function openGoSheet(di, s, mode){
   const sheet = $('#sheet'), body = $('#sheetBody'); $('#sheetTitle').textContent = s.name; body.innerHTML = '';
   const add = (ic, label, fn, cls) => { const b = document.createElement('button'); b.className = 'sheet-item ' + (cls || ''); b.innerHTML = `<span class="ic">${ic}</span><span></span>`; b.lastChild.textContent = label; b.onclick = () => { sheet.close(); fn(); }; body.appendChild(b); };
-  add('🧭', '導航到這裡（從目前位置）', () => window.open(navUrl(s, mode), '_blank'));
+  add('<svg class="pin" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" fill="currentColor"/></svg>', '導航到這裡（從目前位置）', () => window.open(navUrl(s, mode), '_blank'));
   add('💴', '記一筆', () => openExpense({ di, stopId:s.id, title:s.name }));
   if (s.pid || s.addr) add('📍', '在 Google Maps 看這個地方', () => window.open(s.pid ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name)}&query_place_id=${s.pid}` : `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`, '_blank'));
   const exps = state.expenses.filter(e => e.stopId === s.id);
