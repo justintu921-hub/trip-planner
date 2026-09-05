@@ -235,6 +235,18 @@ function load(){
   if (h.startsWith('t=')) { try { const s = JSON.parse(LZString.decompressFromEncodedURIComponent(h.slice(2))); if (s && s.days) { state = s; save(); toast('已載入分享的行程'); return; } } catch(e){} }
   try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.days) state = s; } catch(e){}
 }
+// ?trip=名稱 → 從 trips/名稱.json 載入（短網址用）。第一次開才覆蓋，之後改的存在瀏覽器裡
+async function loadNamedTrip(){
+  const name = new URLSearchParams(location.search).get('trip');
+  if (!name || !/^[\w-]+$/.test(name)) return;
+  try {
+    const r = await fetch(`trips/${name}.json`, { cache:'no-cache' }); if (!r.ok) throw 0;
+    const s = await r.json(); if (!s.days) throw 0;
+    const stamp = JSON.stringify(s).length + ':' + name;
+    if (localStorage.getItem(KEY + ':trip') === stamp) return;  // 這版已經載過，保留使用者自己的修改
+    state = s; save(); localStorage.setItem(KEY + ':trip', stamp); render(); toast(`已載入「${s.title || name}」`);
+  } catch(e) { toast('找不到這份行程'); }
+}
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} }
 function shareUrl(){ return location.origin + location.pathname + '#t=' + LZString.compressToEncodedURIComponent(JSON.stringify(state)); }
 
@@ -270,6 +282,7 @@ async function initMap(){
   });
   $('#badge').textContent = '搜尋地點，或點地圖上的景點加入';
   render();
+  loadNamedTrip();
 }
 
 /* ---------- 搜尋 ---------- */
