@@ -569,26 +569,29 @@ $('#fLookup').addEventListener('click', async () => {
     const fl = await lookupFlight(no, date, key);
     if (!fl.length) { $('#fRes').innerHTML = '<div class="flight-res">查不到這班，確認一下航班號和日期（AeroDataBox 只能查未來約 1 年、過去 7 天內）</div>'; return; }
     const f = fl[0], dep = f.departure || {}, arr = f.arrival || {};
-    const an = a => (a.airport && (a.airport.shortName || a.airport.name || a.airport.iata)) || '?';
-    flightHit = { no, dep:{ ap:an(dep), iata:dep.airport && dep.airport.iata, t:lt(dep.scheduledTime || dep.scheduledTimeLocal) }, arr:{ ap:an(arr), iata:arr.airport && arr.airport.iata, t:lt(arr.scheduledTime || arr.scheduledTimeLocal) }, airline:f.airline && f.airline.name };
-    $('#fRes').innerHTML = `<div class="flight-res"><b>${no}</b> ${flightHit.airline || ''}<br>🛫 ${flightHit.dep.ap} ${flightHit.dep.t || '?'}<br>🛬 ${flightHit.arr.ap} ${flightHit.arr.t || '?'}${fl.length > 1 ? `<br><small>這天有 ${fl.length} 個航段，取第一段</small>` : ''}</div>`;
+    const side = a => { const ap = a.airport || {}; return { ap:ap.shortName || ap.name || ap.iata || '?', full:ap.name || '', iata:ap.iata, lat:ap.location && ap.location.lat, lng:ap.location && ap.location.lon, t:lt(a.scheduledTime), term:a.terminal || '' }; };
+    flightHit = { no:(f.number || no).replace(/\s+/g, ''), dep:side(dep), arr:side(arr), airline:f.airline && f.airline.name, status:f.status };
+    const term = s => s.term ? `（${s.term} 航廈）` : '';
+    $('#fRes').innerHTML = `<div class="flight-res"><b>${flightHit.no}</b> ${flightHit.airline || ''}<br>🛫 ${flightHit.dep.ap} ${flightHit.dep.t || '?'}${term(flightHit.dep)}<br>🛬 ${flightHit.arr.ap} ${flightHit.arr.t || '?'}${term(flightHit.arr)}<br><small>時間都是當地時間${fl.length > 1 ? `；這天有 ${fl.length} 個航段，取第一段` : ''}</small></div>`;
     $('#fApplyArr').hidden = !flightHit.arr.t; $('#fApplyDep').hidden = !flightHit.dep.t;
   } catch(e) { $('#fRes').innerHTML = `<div class="flight-res">${e.message}</div>`; }
 });
-async function airportPlace(name, iata){
-  try { const { places } = await placesLib.Place.searchByText({ textQuery:`${name} ${iata || ''} airport`, fields:['displayName','formattedAddress','location','id'], language:'zh-TW', maxResultCount:1 }); const p = places[0]; if (p) return { name:p.displayName, addr:p.formattedAddress, lat:p.location.lat(), lng:p.location.lng(), pid:p.id }; } catch(e){}
+// 機場座標：優先用 AeroDataBox 回傳的，沒有再問 Google
+async function airportPlace(s){
+  try { const { places } = await placesLib.Place.searchByText({ textQuery:`${s.full || s.ap} ${s.iata || ''} airport`, fields:['displayName','formattedAddress','location','id'], language:'zh-TW', maxResultCount:1, ...(s.lat ? { locationBias:{ center:{ lat:s.lat, lng:s.lng }, radius:20000 } } : {}) }); const p = places[0]; if (p) return { name:p.displayName, addr:p.formattedAddress, lat:p.location.lat(), lng:p.location.lng(), pid:p.id }; } catch(e){}
+  if (s.lat) return { name:`${s.ap} 機場${s.iata ? ' (' + s.iata + ')' : ''}`, addr:'', lat:s.lat, lng:s.lng, pid:'' };
   return null;
 }
 $('#fApplyArr').addEventListener('click', async () => {
   const d = state.days[activeDay]; d.start = addMin(flightHit.arr.t, 40);
-  const ap = await airportPlace(flightHit.arr.ap, flightHit.arr.iata);
-  if (ap) { d.stops.unshift({ id:uid(), ...ap, stay:0, note:`${flightHit.no} ${flightHit.arr.t} 抵達（出發時間已含 40 分入境領行李）` }); }
+  const ap = await airportPlace(flightHit.arr);
+  if (ap) d.stops.unshift({ id:uid(), ...ap, stay:0, note:`${flightHit.no} ${flightHit.arr.t} 抵達${flightHit.arr.term ? ' ' + flightHit.arr.term + ' 航廈' : ''}（出發時間已含 40 分入境領行李）` });
   save(); render(); $('#flightDlg').close(); toast(`${dayLabel(activeDay)} 出發時間設為 ${d.start}`);
 });
 $('#fApplyDep').addEventListener('click', async () => {
   const d = state.days[activeDay];
-  const ap = await airportPlace(flightHit.dep.ap, flightHit.dep.iata);
-  if (ap) d.stops.push({ id:uid(), ...ap, stay:0, note:`${flightHit.no} ${flightHit.dep.t} 起飛，建議 ${addMin(flightHit.dep.t, -120)} 前到機場` });
+  const ap = await airportPlace(flightHit.dep);
+  if (ap) d.stops.push({ id:uid(), ...ap, stay:0, note:`${flightHit.no} ${flightHit.dep.t} 起飛${flightHit.dep.term ? ' ' + flightHit.dep.term + ' 航廈' : ''}，建議 ${addMin(flightHit.dep.t, -120)} 前到機場` });
   save(); render(); $('#flightDlg').close();
 });
 $('#btnKey').addEventListener('click', () => { const k = prompt('AeroDataBox 的 RapidAPI Key（留空清除）', localStorage.getItem(RK) || ''); if (k === null) return; if (k.trim()) localStorage.setItem(RK, k.trim()); else localStorage.removeItem(RK); $('#menuDlg').close(); toast('已更新'); });
