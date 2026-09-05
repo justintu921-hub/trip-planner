@@ -124,10 +124,15 @@
   .tl .lg{grid-column:2;font-size:12px;color:var(--muted);padding:4px 0 4px 8px;border-left:2px solid var(--line);margin-left:4px}
 
   /* 口袋名單：小藥丸 */
-  .pool{position:sticky;top:0;z-index:6;box-shadow:0 4px 10px -6px rgba(0,0,0,.25)}
-  .pool .day-head{background:#f0efeb}
-  .pool-list{max-height:132px;overflow:auto}
+  #poolMount{flex:none}
+  #poolMount .pool{margin:0;border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none}
+  #poolMount .pool.active{box-shadow:inset 3px 0 0 var(--ink)}
+  .pool .day-head{background:#f0efeb;padding-top:7px;padding-bottom:7px}
+  .pool-list{max-height:120px;overflow:auto}
+  .pool-list[hidden]{display:none}
+  body.go #poolMount{display:none}
   .pool.closed .day-head{border-bottom:0}
+  .pool.closed{border-bottom:1px solid var(--line)}
   .pool-list{display:flex;flex-wrap:wrap;gap:6px;padding:8px}
   .pill{display:inline-flex;align-items:center;gap:2px;padding:0 2px 0 10px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:13px;cursor:grab;max-width:100%}
   .pill:hover{border-color:#c9c7c1;background:#faf9f7}
@@ -305,6 +310,7 @@
     </div>
     <div class="hint" id="hint"></div>
   </header>
+  <div id="poolMount"></div>
   <div id="days"></div>
 </aside>
 
@@ -737,8 +743,8 @@ function render(){
       pl.appendChild(pill);
     });
     new Sortable(pl, { group:'stops', animation:160, draggable:'.stop', delay:120, delayOnTouchOnly:true, filter:'button', preventOnFilter:false, scroll:$('#days'), scrollSensitivity:90, scrollSpeed:18, bubbleScroll:true, forceAutoScrollFallback:true, onEnd:onDragEnd });
-    wrap.appendChild(pool);
-  }
+    const pm = $('#poolMount'); pm.innerHTML = ''; pm.appendChild(pool);
+  } else $('#poolMount').innerHTML = '';
 
   state.days.forEach((day, di) => {
     const st = dayStats(di), ld = loadLevel(st); if (st.pending) anyPending = true;
