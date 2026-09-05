@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>旅程規劃</title>
+<style>
+  :root{
+    --bg:#f6f5f2; --panel:#fff; --ink:#1d1d1b; --muted:#6b6b66; --line:#e6e4df;
+    --accent:#1a73e8; --accent-ink:#fff; --danger:#c8402f;
+    --d0:#1a73e8; --d1:#e8710a; --d2:#188038; --d3:#9334e6; --d4:#d93025; --d5:#0b8043; --d6:#f9ab00; --d7:#007b83;
+    --sidebar:440px; --radius:12px;
+    font-family: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink)}
+  body{display:grid;grid-template-columns:var(--sidebar) 1fr;height:100dvh;overflow:hidden}
+
+  /* ---------- sidebar ---------- */
+  aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  header{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+  .title-row{display:flex;align-items:center;gap:8px}
+  #tripTitle{flex:1;font-size:20px;font-weight:700;border:0;background:transparent;padding:4px 6px;border-radius:8px;min-width:0}
+  #tripTitle:focus{outline:2px solid var(--accent);background:#f3f7fd}
+  .toolbar{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);padding:6px 10px;border-radius:8px;font-size:13px;line-height:1.2}
+  button:hover{background:#f3f2ee}
+  button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  button.primary:hover{background:#1765cc}
+  button.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+  button.ghost:hover{background:#f3f2ee;color:var(--ink)}
+  select{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .search{position:relative;margin-top:10px}
+  .search input{width:100%;font:inherit;font-size:14px;padding:10px 12px 10px 36px;border:1px solid var(--line);border-radius:10px;background:#faf9f7}
+  .search input:focus{outline:2px solid var(--accent);background:#fff}
+  .search svg{position:absolute;left:11px;top:11px;width:18px;height:18px;fill:var(--muted)}
+  .results{position:absolute;left:0;right:0;top:100%;z-index:20;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);max-height:280px;overflow:auto;margin-top:4px}
+  .results:empty{display:none}
+  .result{padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line);font-size:13px}
+  .result:last-child{border-bottom:0}
+  .result:hover{background:#f3f7fd}
+  .result b{display:block;font-size:14px;font-weight:600}
+  .result span{color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+
+  /* ---------- days ---------- */
+  #days{flex:1;overflow:auto;padding:10px 12px 90px;min-height:0}
+  .day{margin-bottom:14px;border:1px solid var(--line);border-radius:var(--radius);background:#fff;overflow:hidden}
+  .day.active{box-shadow:0 0 0 2px var(--dc)}
+  .day-head{display:flex;align-items:center;gap:8px;padding:9px 10px 9px 12px;background:#faf9f7;border-bottom:1px solid var(--line);cursor:pointer}
+  .day-dot{width:10px;height:10px;border-radius:50%;background:var(--dc);flex:none}
+  .day-name{font-weight:700;font-size:14px;flex:1}
+  .day-name small{font-weight:400;color:var(--muted);margin-left:6px;font-size:12px}
+  .day-head input[type=time]{font:inherit;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:2px 4px;background:#fff}
+  .day-summary{font-size:12px;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--line);display:flex;gap:12px;flex-wrap:wrap}
+  .stops{min-height:36px;padding:6px 8px}
+  .stop{display:grid;grid-template-columns:26px 1fr auto;gap:8px;align-items:start;padding:8px 6px;border-radius:10px;background:#fff;border:1px solid transparent;cursor:grab}
+  .stop:hover{background:#faf9f7;border-color:var(--line)}
+  .stop.sortable-ghost{opacity:.35;background:#e8f0fe;border:1px dashed var(--accent)}
+  .stop.sortable-chosen{cursor:grabbing}
+  .num{width:24px;height:24px;border-radius:50%;background:var(--dc);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;margin-top:2px}
+  .stop-body{min-width:0}
+  .stop-name{font-weight:600;font-size:14px;line-height:1.3;word-break:break-word}
+  .stop-addr{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stop-meta{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+  .stop-meta .arrive{background:#f0efeb;border-radius:6px;padding:2px 7px;font-variant-numeric:tabular-nums}
+  .stop-meta input{font:inherit;font-size:12px;width:52px;border:1px solid var(--line);border-radius:6px;padding:2px 5px;text-align:right}
+  .stop-note{width:100%;font:inherit;font-size:12px;border:0;border-bottom:1px dashed var(--line);background:transparent;padding:3px 0;margin-top:4px;color:var(--ink)}
+  .stop-note::placeholder{color:#b5b3ad}
+  .stop-note:focus{outline:0;border-bottom-color:var(--accent)}
+  .stop-actions{display:flex;flex-direction:column;gap:2px}
+  .stop-actions button{padding:3px 6px;font-size:12px;border-color:transparent;color:var(--muted)}
+  .stop-actions button:hover{color:var(--danger)}
+  .leg{display:flex;align-items:center;gap:8px;padding:2px 0 2px 17px;font-size:12px;color:var(--muted);height:24px}
+  .leg::before{content:"";width:2px;height:100%;background:var(--line);margin-right:6px;border-radius:2px}
+  .leg b{color:var(--ink);font-weight:600}
+  .leg a{color:var(--accent);text-decoration:none;margin-left:auto;margin-right:10px;font-size:11px}
+  .empty{color:var(--muted);font-size:12.5px;text-align:center;padding:12px}
+  .day-foot{display:flex;gap:6px;padding:6px 10px 10px;justify-content:flex-end}
+  .day-foot button{font-size:12px}
+
+  /* ---------- map ---------- */
+  main{position:relative;min-width:0}
+  #map{position:absolute;inset:0}
+  .map-badge{position:absolute;top:12px;left:12px;background:#fff;padding:6px 10px;border-radius:8px;font-size:12px;color:var(--muted);box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:5;max-width:70%}
+
+  /* ---------- toast + modal ---------- */
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d1d1b;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:99}
+  #toast.show{opacity:1}
+  dialog{border:0;border-radius:14px;padding:20px;max-width:440px;width:calc(100% - 32px);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  dialog::backdrop{background:rgba(0,0,0,.35)}
+  dialog h3{margin:0 0 8px}
+  dialog p{font-size:13px;color:var(--muted);margin:0 0 12px}
+  dialog textarea{width:100%;font:12px/1.4 ui-monospace,monospace;height:80px;border:1px solid var(--line);border-radius:8px;padding:8px;word-break:break-all}
+  .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+
+  /* ---------- mobile ---------- */
+  #mobileTab{display:none}
+  @media (max-width:820px){
+    body{grid-template-columns:1fr;grid-template-rows:1fr auto}
+    main{order:1;height:42dvh}
+    aside{order:2;height:58dvh;border-right:0;border-top:1px solid var(--line)}
+    :root{--sidebar:100%}
+  }
+</style>
+</head>
+<body>
+
+<aside>
+  <header>
+    <div class="title-row">
+      <input id="tripTitle" placeholder="旅程名稱" spellcheck="false">
+      <button class="ghost" id="btnMenu" title="更多">⋯</button>
+    </div>
+    <div class="toolbar">
+      <select id="mode" title="交通方式">
+        <option value="DRIVING">🚗 開車</option>
+        <option value="TRANSIT">🚌 大眾運輸</option>
+        <option value="WALKING">🚶 步行</option>
+      </select>
+      <button id="btnAddDay">＋ 新增一天</button>
+      <button class="primary" id="btnShare">分享連結</button>
+    </div>
+    <div class="search">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 9.5 16a6.5 6.5 0 0 0 4.2-1.6l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg>
+      <input id="q" placeholder="搜尋景點、餐廳、飯店… 按 Enter" autocomplete="off">
+      <div class="results" id="results"></div>
+    </div>
+    <div class="hint" id="hint">搜尋結果會加到目前選取的那一天。拖拉卡片可以排序或搬到別天。</div>
+  </header>
+  <div id="days"></div>
+</aside>
+
+<main>
+  <div id="map"></div>
+  <div class="map-badge" id="badge">載入地圖中…</div>
+</main>
+
+<div id="toast"></div>
+
+<dialog id="shareDlg">
+  <h3>分享給旅伴</h3>
+  <p>整份行程都壓在這個連結裡，旅伴打開就能看、也能改。對方改完再把新連結傳回來即可。</p>
+  <textarea id="shareUrl" readonly></textarea>
+  <div class="row">
+    <button id="btnCopy" class="primary">複製連結</button>
+    <button onclick="shareDlg.close()">關閉</button>
+  </div>
+</dialog>
+
+<dialog id="menuDlg">
+  <h3>更多</h3>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <button id="btnExport">下載行程 JSON 備份</button>
+    <button id="btnImport">從 JSON 備份匯入</button>
+    <button id="btnClear" style="color:var(--danger)">清空整份行程</button>
+  </div>
+  <div class="row"><button onclick="menuDlg.close()">關閉</button></div>
+  <input type="file" id="fileIn" accept="application/json" hidden>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.6/Sortable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+<script>
+/* ============================================================
+   狀態
+   ============================================================ */
+const KEY = 'trip-planner-v1';
+const COLORS = ['#1a73e8','#e8710a','#188038','#9334e6','#d93025','#0b8043','#f9ab00','#007b83'];
+let state = {
+  title: '', mode: 'DRIVING',
+  days: [{ name: 'Day 1', start: '09:00', stops: [] }],
+};
+let activeDay = 0;
+let map, dirService, renderer, markers = [], placesLib;
+const legCache = new Map();  // key -> {sec, m, text}
+
+const uid = () => Math.random().toString(36).slice(2, 9);
+const $ = s => document.querySelector(s);
+const dayColor = i => COLORS[i % COLORS.length];
+
+/* ---------- 載入 / 儲存 ---------- */
+function load(){
+  const h = location.hash.slice(1);
+  if (h.startsWith('t=')) {
+    try { const s = JSON.parse(LZString.decompressFromEncodedURIComponent(h.slice(2))); if (s && s.days) { state = s; save(); toast('已載入分享的行程'); return; } } catch(e){}
+  }
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.days) state = s; } catch(e){}
+}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} }
+function shareUrl(){
+  const enc = LZString.compressToEncodedURIComponent(JSON.stringify(state));
+  return location.origin + location.pathname + '#t=' + enc;
+}
+
+/* ============================================================
+   Google Maps
+   ============================================================ */
+async function initMap(){
+  const { Map } = await google.maps.importLibrary('maps');
+  await google.maps.importLibrary('routes');
+  placesLib = await google.maps.importLibrary('places');
+  map = new Map($('#map'), {
+    center: { lat: 25.04, lng: 121.53 }, zoom: 11,
+    mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+    clickableIcons: true,
+  });
+  dirService = new google.maps.DirectionsService();
+  renderer = new google.maps.DirectionsRenderer({ map, suppressMarkers: true, preserveViewport: true, polylineOptions: { strokeWeight: 5, strokeOpacity: .8 } });
+
+  // 點地圖上的 POI 也可以直接加入
+  map.addListener('click', async e => {
+    if (!e.placeId) return;
+    e.stop();
+    const p = new placesLib.Place({ id: e.placeId });
+    await p.fetchFields({ fields: ['displayName','formattedAddress','location'] });
+    addStop({ name: p.displayName, addr: p.formattedAddress, lat: p.location.lat(), lng: p.location.lng(), pid: p.id });
+  });
+
+  $('#badge').textContent = '搜尋地點，或直接點地圖上的店家加入';
+  render();
+}
+
+/* ---------- 搜尋 ---------- */
+let searchTimer;
+async function search(q){
+  const box = $('#results'); box.innerHTML = '';
+  if (!q.trim()) return;
+  try {
+    const { places } = await placesLib.Place.searchByText({
+      textQuery: q, fields: ['displayName','formattedAddress','location','id'],
+      locationBias: map.getBounds() || undefined, language: 'zh-TW', maxResultCount: 8,
+    });
+    if (!places.length) { box.innerHTML = '<div class="result"><span>找不到，換個關鍵字試試</span></div>'; return; }
+    for (const p of places) {
+      const d = document.createElement('div'); d.className = 'result';
+      d.innerHTML = `<b></b><span></span>`;
+      d.querySelector('b').textContent = p.displayName;
+      d.querySelector('span').textContent = p.formattedAddress || '';
+      d.onclick = () => { addStop({ name: p.displayName, addr: p.formattedAddress, lat: p.location.lat(), lng: p.location.lng(), pid: p.id }); box.innerHTML = ''; $('#q').value = ''; };
+      box.appendChild(d);
+    }
+  } catch(e) { console.error(e); box.innerHTML = '<div class="result"><span>搜尋失敗：' + (e.message || e) + '</span></div>'; }
+}
+$('#q').addEventListener('input', e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => search(e.target.value), 450); });
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(searchTimer); search(e.target.value); } if (e.key === 'Escape') $('#results').innerHTML=''; });
+document.addEventListener('click', e => { if (!e.target.closest('.search')) $('#results').innerHTML = ''; });
+
+/* ============================================================
+   行程操作
+   ============================================================ */
+function addStop(p){
+  const day = state.days[activeDay];
+  day.stops.push({ id: uid(), name: p.name, addr: p.addr || '', lat: p.lat, lng: p.lng, pid: p.pid || '', stay: 60, note: '' });
+  save(); render(); toast(`已加入 ${day.name}：${p.name}`);
+}
+function removeStop(di, id){ state.days[di].stops = state.days[di].stops.filter(s => s.id !== id); save(); render(); }
+function addDay(){ state.days.push({ name: `Day ${state.days.length + 1}`, start: '09:00', stops: [] }); activeDay = state.days.length - 1; save(); render(); }
+function removeDay(di){
+  if (state.days.length === 1) { state.days[0].stops = []; }
+  else state.days.splice(di, 1);
+  state.days.forEach((d, i) => { if (/^Day \d+$/.test(d.name)) d.name = `Day ${i + 1}`; });
+  activeDay = Math.min(activeDay, state.days.length - 1); save(); render();
+}
+
+/* ---------- 車程計算 ---------- */
+const legKey = (a, b, mode) => `${mode}|${a.lat.toFixed(5)},${a.lng.toFixed(5)}|${b.lat.toFixed(5)},${b.lng.toFixed(5)}`;
+function fmtDur(sec){ const m = Math.round(sec / 60); return m < 60 ? `${m} 分` : `${Math.floor(m / 60)} 小時 ${m % 60 ? (m % 60) + ' 分' : ''}`.trim(); }
+function fmtDist(m){ return m < 1000 ? `${m} 公尺` : `${(m / 1000).toFixed(1)} 公里`; }
+function addMin(hhmm, min){ const [h, m] = hhmm.split(':').map(Number); const t = h * 60 + m + min; return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; }
+
+async function routeDay(di){
+  const day = state.days[di]; const stops = day.stops;
+  if (stops.length < 2) { if (di === activeDay) renderer.setDirections({ routes: [] }); return; }
+  const mode = state.mode;
+  const missing = [];
+  for (let i = 0; i < stops.length - 1; i++) if (!legCache.has(legKey(stops[i], stops[i + 1], mode))) missing.push(i);
+
+  // 大眾運輸不支援 waypoints，逐段查
+  if (mode === 'TRANSIT') {
+    for (const i of missing) {
+      try {
+        const r = await dirService.route({ origin: stops[i], destination: stops[i + 1], travelMode: mode, language: 'zh-TW' });
+        const leg = r.routes[0].legs[0];
+        legCache.set(legKey(stops[i], stops[i + 1], mode), { sec: leg.duration.value, m: leg.distance.value });
+      } catch(e) { legCache.set(legKey(stops[i], stops[i + 1], mode), { err: true }); }
+    }
+    if (di === activeDay) drawDayPolyline(day);
+    return;
+  }
+
+  // 開車 / 步行：整天一次查完（最多 25 個點），順便畫路線
+  const need = missing.length > 0 || di === activeDay;
+  if (!need) return;
+  try {
+    const r = await dirService.route({
+      origin: stops[0], destination: stops[stops.length - 1],
+      waypoints: stops.slice(1, -1).map(s => ({ location: s, stopover: true })),
+      travelMode: mode, language: 'zh-TW',
+    });
+    r.routes[0].legs.forEach((leg, i) => legCache.set(legKey(stops[i], stops[i + 1], mode), { sec: leg.duration.value, m: leg.distance.value }));
+    if (di === activeDay) { renderer.setOptions({ polylineOptions: { strokeColor: dayColor(di), strokeWeight: 5, strokeOpacity: .8 } }); renderer.setDirections(r); }
+  } catch(e) {
+    console.warn('route fail', e);
+    missing.forEach(i => legCache.set(legKey(stops[i], stops[i + 1], mode), { err: true }));
+    if (di === activeDay) drawDayPolyline(day);
+  }
+}
+let fallbackLine;
+function drawDayPolyline(day){
+  renderer.setDirections({ routes: [] });
+  if (fallbackLine) fallbackLine.setMap(null);
+  fallbackLine = new google.maps.Polyline({ map, path: day.stops.map(s => ({ lat: s.lat, lng: s.lng })), strokeColor: dayColor(activeDay), strokeOpacity: .6, strokeWeight: 3, icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '12px' }] });
+}
+
+/* ============================================================
+   畫面
+   ============================================================ */
+function render(){
+  $('#tripTitle').value = state.title;
+  document.title = (state.title || '旅程規劃') + ' · 旅程規劃';
+  $('#mode').value = state.mode;
+  const wrap = $('#days'); wrap.innerHTML = '';
+
+  state.days.forEach((day, di) => {
+    const el = document.createElement('section');
+    el.className = 'day' + (di === activeDay ? ' active' : '');
+    el.style.setProperty('--dc', dayColor(di));
+
+    // 累計時間
+    let clock = day.start || '09:00', totalSec = 0, totalM = 0, pending = false;
+    const rows = [];
+    day.stops.forEach((s, i) => {
+      rows.push({ type: 'stop', s, i, arrive: clock });
+      clock = addMin(clock, +s.stay || 0);
+      if (i < day.stops.length - 1) {
+        const c = legCache.get(legKey(s, day.stops[i + 1], state.mode));
+        if (c && !c.err) { totalSec += c.sec; totalM += c.m; clock = addMin(clock, Math.round(c.sec / 60)); }
+        else if (!c) pending = true;
+        rows.push({ type: 'leg', c, a: s, b: day.stops[i + 1] });
+      }
+    });
+
+    el.innerHTML = `
+      <div class="day-head">
+        <span class="day-dot"></span>
+        <span class="day-name" contenteditable="true" spellcheck="false"></span>
+        <input type="time" value="${day.start || '09:00'}" title="出發時間">
+      </div>
+      <div class="day-summary">
+        <span>📍 ${day.stops.length} 個地點</span>
+        ${day.stops.length > 1 ? `<span>${modeIcon()} 移動 ${pending ? '計算中…' : fmtDur(totalSec)}</span><span>📏 ${fmtDist(totalM)}</span><span>🏁 約 ${clock} 結束</span>` : ''}
+      </div>
+      <div class="stops" data-day="${di}"></div>
+      <div class="day-foot">
+        ${day.stops.length > 1 ? `<a href="${gmapsUrl(day)}" target="_blank" rel="noopener"><button title="在 Google Maps 開整天路線">在 Google Maps 開啟</button></a>` : ''}
+        <button class="ghost" data-del-day>${state.days.length === 1 ? '清空這天' : '刪除這天'}</button>
+      </div>`;
+    const nameEl = el.querySelector('.day-name'); nameEl.textContent = day.name;
+    nameEl.addEventListener('blur', () => { day.name = nameEl.textContent.trim() || `Day ${di + 1}`; save(); });
+    nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); } });
+    nameEl.addEventListener('click', e => e.stopPropagation());
+    el.querySelector('.day-head').addEventListener('click', () => { if (activeDay !== di) { activeDay = di; render(); } });
+    el.querySelector('input[type=time]').addEventListener('click', e => e.stopPropagation());
+    el.querySelector('input[type=time]').addEventListener('change', e => { day.start = e.target.value; save(); render(); });
+    el.querySelector('[data-del-day]').addEventListener('click', () => { if (confirm(`確定${state.days.length === 1 ? '清空' : '刪除'}「${day.name}」？`)) removeDay(di); });
+
+    const list = el.querySelector('.stops');
+    if (!day.stops.length) list.innerHTML = `<div class="empty">${di === activeDay ? '這天還沒有行程，用上面的搜尋加入地點' : '點這天的標題，再搜尋加入地點'}</div>`;
+    rows.forEach(r => {
+      if (r.type === 'stop') list.appendChild(stopEl(day, di, r));
+      else {
+        const d = document.createElement('div'); d.className = 'leg';
+        if (!r.c) d.innerHTML = `${modeIcon()} 計算中…`;
+        else if (r.c.err) d.innerHTML = `${modeIcon()} 查不到路線`;
+        else d.innerHTML = `${modeIcon()} <b>${fmtDur(r.c.sec)}</b> · ${fmtDist(r.c.m)} <a href="${gmapsLeg(r.a, r.b)}" target="_blank" rel="noopener">導航 ↗</a>`;
+        list.appendChild(d);
+      }
+    });
+
+    new Sortable(list, {
+      group: 'stops', animation: 160, draggable: '.stop', handle: '.stop', delay: 120, delayOnTouchOnly: true,
+      filter: 'input,textarea,button,[contenteditable]', preventOnFilter: false,
+      onEnd: evt => {
+        const from = +evt.from.dataset.day, to = +evt.to.dataset.day;
+        const [moved] = state.days[from].stops.splice(evt.oldDraggableIndex, 1);
+        state.days[to].stops.splice(evt.newDraggableIndex, 0, moved);
+        activeDay = to; save(); render();
+      },
+    });
+    wrap.appendChild(el);
+  });
+
+  drawMarkers();
+  state.days.forEach((_, di) => routeDay(di).then(() => refreshLegs()));
+}
+
+function stopEl(day, di, r){
+  const s = r.s;
+  const el = document.createElement('div'); el.className = 'stop'; el.dataset.id = s.id;
+  el.innerHTML = `
+    <div class="num">${r.i + 1}</div>
+    <div class="stop-body">
+      <div class="stop-name"></div>
+      <div class="stop-addr"></div>
+      <div class="stop-meta">
+        <span class="arrive">${r.arrive} 抵達</span>
+        <span>停留 <input type="number" min="0" step="5" value="${s.stay}"> 分</span>
+      </div>
+      <input class="stop-note" placeholder="備註：訂位、門票、想吃什麼…">
+    </div>
+    <div class="stop-actions"><button title="移除">✕</button></div>`;
+  el.querySelector('.stop-name').textContent = s.name;
+  el.querySelector('.stop-addr').textContent = s.addr;
+  el.querySelector('.stop-note').value = s.note || '';
+  el.querySelector('.stop-note').addEventListener('change', e => { s.note = e.target.value; save(); });
+  el.querySelector('input[type=number]').addEventListener('change', e => { s.stay = +e.target.value || 0; save(); render(); });
+  el.querySelector('.stop-actions button').addEventListener('click', () => removeStop(di, s.id));
+  el.addEventListener('click', e => {
+    if (e.target.closest('input,button')) return;
+    activeDay = di; map.panTo({ lat: s.lat, lng: s.lng }); if (map.getZoom() < 14) map.setZoom(14);
+    if (!el.closest('.day').classList.contains('active')) render();
+  });
+  return el;
+}
+
+// 只更新車程文字，不整頁重畫（避免拖拉時閃爍）
+function refreshLegs(){
+  let needFull = false;
+  document.querySelectorAll('.leg').forEach(() => {});
+  // 簡單做法：若還有「計算中」就整頁重畫一次
+  if ([...document.querySelectorAll('.leg')].some(l => l.textContent.includes('計算中'))) needFull = true;
+  if (needFull) { renderStatic(); }
+}
+let renderingStatic = false;
+function renderStatic(){ if (renderingStatic) return; renderingStatic = true; requestAnimationFrame(() => { renderingStatic = false; render(); }); }
+
+function drawMarkers(){
+  markers.forEach(m => m.setMap(null)); markers = [];
+  const bounds = new google.maps.LatLngBounds(); let any = false;
+  state.days.forEach((day, di) => day.stops.forEach((s, i) => {
+    const active = di === activeDay;
+    const m = new google.maps.Marker({
+      map, position: { lat: s.lat, lng: s.lng }, title: `${day.name} ${i + 1}. ${s.name}`,
+      label: { text: String(i + 1), color: '#fff', fontSize: '12px', fontWeight: '700' },
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: active ? 14 : 10, fillColor: dayColor(di), fillOpacity: active ? 1 : .55, strokeColor: '#fff', strokeWeight: 2 },
+      zIndex: active ? 10 : 1,
+    });
+    m.addListener('click', () => { activeDay = di; render(); });
+    markers.push(m); bounds.extend(m.getPosition()); any = true;
+  }));
+  if (any && !map._fitted) { map.fitBounds(bounds, 60); map._fitted = true; }
+  else if (any && state.days[activeDay].stops.length) {
+    const b = new google.maps.LatLngBounds(); state.days[activeDay].stops.forEach(s => b.extend({ lat: s.lat, lng: s.lng }));
+    if (!map.getBounds() || !map.getBounds().contains(b.getCenter())) map.fitBounds(b, 60);
+  }
+}
+
+function modeIcon(){ return { DRIVING: '🚗', TRANSIT: '🚌', WALKING: '🚶' }[state.mode]; }
+const gm = s => encodeURIComponent(s.pid ? s.name : `${s.lat},${s.lng}`);
+const gmMode = () => ({ DRIVING: 'driving', TRANSIT: 'transit', WALKING: 'walking' })[state.mode];
+function gmapsUrl(day){
+  const s = day.stops; const p = s => `${s.lat},${s.lng}`;
+  return `https://www.google.com/maps/dir/?api=1&origin=${p(s[0])}&destination=${p(s[s.length - 1])}&waypoints=${s.slice(1, -1).map(p).join('|')}&travelmode=${gmMode()}`;
+}
+function gmapsLeg(a, b){ return `https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a.lng}&destination=${b.lat},${b.lng}&travelmode=${gmMode()}`; }
+
+/* ============================================================
+   工具列
+   ============================================================ */
+$('#tripTitle').addEventListener('input', e => { state.title = e.target.value; save(); document.title = (state.title || '旅程規劃') + ' · 旅程規劃'; });
+$('#mode').addEventListener('change', e => { state.mode = e.target.value; save(); render(); });
+$('#btnAddDay').addEventListener('click', addDay);
+$('#btnShare').addEventListener('click', async () => {
+  const url = shareUrl(); $('#shareUrl').value = url; history.replaceState(null, '', url.slice(url.indexOf('#')));
+  if (navigator.share && /Mobi|Android/i.test(navigator.userAgent)) { try { await navigator.share({ title: state.title || '旅程規劃', url }); return; } catch(e){} }
+  $('#shareDlg').showModal();
+});
+$('#btnCopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('#shareUrl').value); toast('已複製，貼給旅伴吧'); } catch(e) { $('#shareUrl').select(); document.execCommand('copy'); toast('已複製'); } });
+$('#btnMenu').addEventListener('click', () => $('#menuDlg').showModal());
+$('#btnExport').addEventListener('click', () => {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
+  a.download = (state.title || 'trip') + '.json'; a.click(); $('#menuDlg').close();
+});
+$('#btnImport').addEventListener('click', () => $('#fileIn').click());
+$('#fileIn').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const s = JSON.parse(await f.text()); if (!s.days) throw 0; state = s; activeDay = 0; save(); render(); $('#menuDlg').close(); toast('已匯入'); } catch { toast('這個檔案不是行程備份'); }
+});
+$('#btnClear').addEventListener('click', () => { if (confirm('確定清空整份行程？無法復原。')) { state = { title: '', mode: 'DRIVING', days: [{ name: 'Day 1', start: '09:00', stops: [] }] }; activeDay = 0; legCache.clear(); save(); render(); $('#menuDlg').close(); history.replaceState(null, '', location.pathname); } });
+
+let toastTimer;
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200); }
+
+load();
+</script>
+<script>
+  (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+    key: "AIzaSyDoKHNW9x_svaZy5vB-CXTFX8vqFnIrzak",
+    v: "weekly", language: "zh-TW", region: "TW",
+  });
+  initMap().catch(e => { $('#badge').textContent = '地圖載入失敗：' + e.message; console.error(e); });
+</script>
+</body>
+</html>
