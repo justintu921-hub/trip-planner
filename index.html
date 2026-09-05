@@ -13,14 +13,22 @@
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;background:var(--bg);color:var(--ink)}
-  body{display:grid;grid-template-columns:var(--sidebar) 1fr;height:100dvh;overflow:hidden}
+  body{display:grid;grid-template-columns:var(--sidebar) 1fr;height:100dvh;width:100%;overflow:hidden}
+  aside,main{min-width:0;min-height:0}
+  /* 分隔線：電腦版在側欄右邊、手機版在地圖和行程之間 */
+  #divider{position:absolute;z-index:8;touch-action:none;user-select:none}
+  #divider::after{content:"";position:absolute;background:#c9c7c1;border-radius:3px}
+  #divider:hover::after,#divider.on::after{background:var(--accent)}
+  body.list #divider{display:none}
   body.list{grid-template-columns:1fr}
   body.list main{display:none}
   body.list aside{border-right:0}
   body.list #days{max-width:860px;margin:0 auto;width:100%}
   body.list header{max-width:860px;margin:0 auto;width:100%}
 
-  aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;position:relative}
+  #divider{top:0;bottom:0;right:-5px;width:10px;cursor:col-resize}
+  #divider::after{top:50%;left:3px;width:4px;height:44px;transform:translateY(-50%)}
   header{padding:12px 16px 10px;border-bottom:1px solid var(--line)}
   .title-row{display:flex;align-items:center;gap:6px}
   #tripTitle{flex:1;font-size:20px;font-weight:700;border:0;background:transparent;padding:4px 6px;border-radius:8px;min-width:0}
@@ -123,19 +131,26 @@
   .flight-res b{font-size:15px}
 
   @media (max-width:820px){
-    body{grid-template-columns:1fr;grid-template-rows:1fr auto}
+    body{grid-template-columns:1fr;grid-template-rows:var(--mapH,38dvh) 1fr}
     body.list{grid-template-rows:1fr}
-    main{order:1;height:40dvh}
-    aside{order:2;height:60dvh;border-right:0;border-top:1px solid var(--line)}
-    body.list aside{height:100dvh}
-    :root{--sidebar:100%}
+    main{order:1}
+    aside{order:2;border-right:0;border-top:1px solid var(--line)}
+    header{padding-top:18px}
+    #divider{top:-10px;bottom:auto;left:0;right:0;width:auto;height:26px;cursor:row-resize}
+    #divider::after{top:14px;left:50%;width:44px;height:4px;transform:translateX(-50%)}
     .stop-addr{display:none}
+    .map-ui{right:12px}
+    .map-badge{display:none}
+    .toolbar{gap:5px}
+    .toolbar button{padding:6px 7px;font-size:12.5px}
+    #startDate{width:112px;font-size:12.5px}
   }
 </style>
 </head>
 <body>
 
 <aside>
+  <div id="divider" title="拖拉調整地圖大小"></div>
   <header>
     <div class="title-row">
       <input id="tripTitle" placeholder="旅程名稱" spellcheck="false">
@@ -631,6 +646,22 @@ $('#btnExport').addEventListener('click', () => { const a = document.createEleme
 $('#btnImport').addEventListener('click', () => $('#fileIn').click());
 $('#fileIn').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { const s = JSON.parse(await f.text()); if (!s.days) throw 0; state = s; activeDay = 0; save(); render(); $('#menuDlg').close(); toast('已匯入'); } catch { toast('這個檔案不是行程備份'); } });
 $('#btnClear').addEventListener('click', () => { if (confirm('確定清空整份行程？無法復原。')) { state = { title:'', mode:'DRIVING', startDate:'', days:[{ start:'09:00', stops:[] }] }; activeDay = 0; legCache.clear(); save(); render(); $('#menuDlg').close(); history.replaceState(null, '', location.pathname); } });
+
+/* ---------- 拖拉分隔線：手機調地圖高度、電腦調側欄寬度 ---------- */
+(() => {
+  const dv = $('#divider'), root = document.documentElement, isMobile = () => matchMedia('(max-width:820px)').matches;
+  try { const h = localStorage.getItem('tp-mapH'); if (h) root.style.setProperty('--mapH', h); const w = localStorage.getItem('tp-sbW'); if (w) root.style.setProperty('--sidebar', w); } catch(e){}
+  let drag = null;
+  dv.addEventListener('pointerdown', e => { drag = { m:isMobile() }; dv.setPointerCapture(e.pointerId); dv.classList.add('on'); e.preventDefault(); });
+  dv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (drag.m) { const h = Math.min(Math.max(e.clientY, innerHeight * .12), innerHeight * .85); root.style.setProperty('--mapH', h + 'px'); }
+    else { const w = Math.min(Math.max(e.clientX, 300), innerWidth - 320); root.style.setProperty('--sidebar', w + 'px'); }
+  });
+  const end = () => { if (!drag) return; dv.classList.remove('on'); try { if (drag.m) localStorage.setItem('tp-mapH', root.style.getPropertyValue('--mapH')); else localStorage.setItem('tp-sbW', root.style.getPropertyValue('--sidebar')); } catch(e){} drag = null; if (map) google.maps.event.trigger(map, 'resize'); };
+  dv.addEventListener('pointerup', end); dv.addEventListener('pointercancel', end);
+  dv.addEventListener('dblclick', () => { root.style.removeProperty('--mapH'); root.style.removeProperty('--sidebar'); try { localStorage.removeItem('tp-mapH'); localStorage.removeItem('tp-sbW'); } catch(e){} if (map) google.maps.event.trigger(map, 'resize'); });
+})();
 
 let toastTimer;
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400); }
