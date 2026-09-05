@@ -817,7 +817,6 @@ function openSheet(di, s){
   items.push(['⇄', '換成別的地點（保留停留、備註）', () => startReplace(di, s.id)]);
   if (!inPool) {
     items.push(['⧉', '複製一份在下面', () => duplicateStop(di, s.id)]);
-    items.push(['＋', '在這之後插入一站', () => startInsert(di, state.days[di].stops.indexOf(s) + 1)]);
     items.push(["👜", "放回口袋", () => toPool(di, s.id)]);
   }
   items.push(['🗑', '刪除', () => { if (confirm(`刪除「${s.name}」？`)) removeStop(di, s.id); }, 'danger']);
