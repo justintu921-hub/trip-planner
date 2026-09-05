@@ -324,11 +324,12 @@
 
 <dialog id="rateDlg">
   <h3>💱 幣別與匯率</h3>
-  <div style="display:flex;gap:8px">
-    <div class="field" style="width:120px"><label>主要幣別</label><input type="text" id="rCur" placeholder="JPY" autocapitalize="characters"></div>
-    <div class="field" style="flex:1"><label>1 單位 ＝ 多少台幣（留空不換算）</label><input type="text" inputmode="decimal" id="rRate" placeholder="例如日圓 0.22"></div>
+  <div class="field"><label>主要幣別（可以打代碼或國名搜尋）</label><input type="text" id="rCur" list="curList" placeholder="JPY 日圓" autocapitalize="characters" autocomplete="off"><datalist id="curList"></datalist></div>
+  <div class="field"><label>1 單位 ＝ 多少台幣</label>
+    <div style="display:flex;gap:8px;align-items:center"><input type="text" inputmode="decimal" id="rRate" placeholder="按右邊查今天的" style="flex:1"><button id="rFetch">查今日匯率</button></div>
+    <div id="rInfo" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
   </div>
-  <p>台幣記的帳會用這個匯率換成主要幣別一起算；結算也會順便顯示台幣。</p>
+  <p>台幣記的帳會用這個匯率換成主要幣別一起算；結算也會順便顯示台幣。匯率可以自己改成刷卡或換匯的實際數字。</p>
   <div class="row"><button id="rSave" class="primary">儲存</button><button onclick="rateDlg.close()">取消</button></div>
 </dialog>
 
@@ -442,7 +443,12 @@ function load(){
   try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.days) state = normalize(s); } catch(e){}
   try { poolOpen = localStorage.getItem('tp-pool') !== '0'; } catch(e){}
 }
-function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} }
+let hashTimer;
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){}
+  // 同步寫進網址：把網頁加入書籤或加到主畫面，那個連結本身就是存檔
+  clearTimeout(hashTimer); hashTimer = setTimeout(() => { try { history.replaceState(null, '', location.pathname + location.search + '#t=' + LZString.compressToEncodedURIComponent(JSON.stringify(state))); } catch(e){} }, 800);
+}
 function shareUrl(){ return location.origin + location.pathname + '#t=' + LZString.compressToEncodedURIComponent(JSON.stringify(state)); }
 async function loadNamedTrip(){
   const name = new URLSearchParams(location.search).get('trip');
@@ -776,7 +782,7 @@ function stopEl(day, di, r){
     </div>
     <div class="stop-actions">
       ${fixed ? '' : '<button class="more" title="更多">⋯</button>'}
-      <a class="navbtn" href="${navUrl(s, r.mode)}" target="_blank" rel="noopener" title="從目前位置導航到這裡"><svg class="pin" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" fill="currentColor"/></svg></a>
+      <a class="navbtn" href="${placeUrl(s)}" target="_blank" rel="noopener" title="在 Google Maps 看這個地方"><svg class="pin" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" fill="currentColor"/></svg></a>
     </div>`;
   const nameEl = el.querySelector('.stop-name'); nameEl.textContent = s.name;
   el.querySelector('.stop-addr').textContent = s.addr;
@@ -905,7 +911,6 @@ function openGoSheet(di, s, mode){
   const add = (ic, label, fn, cls) => { const b = document.createElement('button'); b.className = 'sheet-item ' + (cls || ''); b.innerHTML = `<span class="ic">${ic}</span><span></span>`; b.lastChild.textContent = label; b.onclick = () => { sheet.close(); fn(); }; body.appendChild(b); };
   add('<svg class="pin" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" fill="currentColor"/></svg>', '導航到這裡（從目前位置）', () => window.open(navUrl(s, mode), '_blank'));
   add('💴', '記一筆', () => openExpense({ di, stopId:s.id, title:s.name }));
-  if (s.pid || s.addr) add('📍', '在 Google Maps 看這個地方', () => window.open(s.pid ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name)}&query_place_id=${s.pid}` : `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`, '_blank'));
   const exps = state.expenses.filter(e => e.stopId === s.id);
   exps.forEach(e => add('✏️', `修改：${fmtMoney(e.amount, e.cur)} ${e.title || ''}（${e.paidBy} 付）`, () => openExpense(e)));
   if (s.note) { const n = document.createElement('div'); n.className = 'sheet-note'; n.textContent = s.note; body.appendChild(n); }
@@ -914,8 +919,24 @@ function openGoSheet(di, s, mode){
 function todayIndex(){ const t = todayStr(); const i = state.days.findIndex((_, di) => dayDate(di) === t); return i >= 0 ? i : activeDay >= 0 ? activeDay : 0; }
 function editMembers(){ $('#mNames').value = state.members.join('、'); $('#membersDlg').showModal(); $('#mNames').focus(); }
 $('#mSave').addEventListener('click', () => { state.members = $('#mNames').value.split(/[,，、\s\n]+/).map(x => x.trim()).filter(Boolean); save(); render(); $('#membersDlg').close(); if (!state.members.length) toast('沒有填到名字'); });
-function editRate(){ $('#rCur').value = state.currency; $('#rRate').value = state.rate || ''; $('#rateDlg').showModal(); }
-$('#rSave').addEventListener('click', () => { state.currency = ($('#rCur').value.trim().toUpperCase() || 'JPY'); state.rate = parseFloat($('#rRate').value) || null; save(); render(); $('#rateDlg').close(); });
+const CURRENCIES = { JPY:'日圓 日本', TWD:'台幣 台灣', KRW:'韓元 韓國', USD:'美元 美國', EUR:'歐元 歐洲', GBP:'英鎊 英國', THB:'泰銖 泰國', VND:'越南盾 越南', HKD:'港幣 香港', MOP:'澳門幣 澳門', SGD:'新幣 新加坡', MYR:'馬幣 馬來西亞', IDR:'印尼盾 印尼 峇里島', PHP:'披索 菲律賓', CNY:'人民幣 中國', AUD:'澳幣 澳洲', NZD:'紐幣 紐西蘭', CAD:'加幣 加拿大', CHF:'瑞士法郎 瑞士', SEK:'瑞典克朗', NOK:'挪威克朗', DKK:'丹麥克朗', CZK:'捷克克朗', HUF:'福林 匈牙利', PLN:'茲羅提 波蘭', TRY:'里拉 土耳其', AED:'迪拉姆 杜拜 阿聯', INR:'盧比 印度', LKR:'盧比 斯里蘭卡', NPR:'盧比 尼泊爾', KHR:'瑞爾 柬埔寨', LAK:'基普 寮國', MMK:'緬元 緬甸', MNT:'圖格里克 蒙古', EGP:'埃及鎊', ZAR:'蘭特 南非', MXN:'披索 墨西哥', BRL:'雷亞爾 巴西', ARS:'披索 阿根廷', PEN:'索爾 秘魯', ISK:'冰島克朗', ILS:'謝克爾 以色列', MVR:'拉菲亞 馬爾地夫', FJP:'斐濟元' };
+$('#curList').innerHTML = Object.entries(CURRENCIES).map(([c, n]) => `<option value="${c}">${n}</option>`).join('');
+const curCode = v => (v.trim().toUpperCase().match(/^[A-Z]{3}/) || [''])[0] || Object.keys(CURRENCIES).find(c => CURRENCIES[c].includes(v.trim())) || '';
+async function fetchRate(code){
+  // open.er-api.com：免費、不用 key，每日更新
+  const r = await fetch(`https://open.er-api.com/v6/latest/${code}`); const j = await r.json();
+  if (j.result !== 'success' || !j.rates || !j.rates.TWD) throw new Error('查不到這個幣別');
+  return { rate:j.rates.TWD, date:(j.time_last_update_utc || '').slice(5, 16) };
+}
+function editRate(){ $('#rCur').value = state.currency; $('#rRate').value = state.rate || ''; $('#rInfo').textContent = state.rateDate ? `上次查的是 ${state.rateDate} 的匯率` : ''; $('#rateDlg').showModal(); }
+$('#rFetch').addEventListener('click', async () => {
+  const code = curCode($('#rCur').value); if (!code) return toast('先選幣別');
+  $('#rInfo').textContent = '查詢中…';
+  try { const { rate, date } = await fetchRate(code); $('#rRate').value = +rate.toFixed(rate < 0.1 ? 5 : 4); $('#rInfo').textContent = `1 ${code} ＝ ${$('#rRate').value} TWD（${date} 中間價，實際刷卡會差 1～2%）`; $('#rateDlg').dataset.date = date; }
+  catch(e) { $('#rInfo').textContent = '查不到，手動填一下：' + e.message; }
+});
+$('#rCur').addEventListener('change', () => { const c = curCode($('#rCur').value); if (c) { $('#rCur').value = c; if (c !== 'TWD') $('#rFetch').click(); else { $('#rRate').value = '1'; $('#rInfo').textContent = ''; } } });
+$('#rSave').addEventListener('click', () => { const c = curCode($('#rCur').value) || 'JPY'; state.currency = c; state.rate = c === 'TWD' ? null : (parseFloat($('#rRate').value) || null); state.rateDate = $('#rateDlg').dataset.date || state.rateDate || ''; save(); render(); $('#rateDlg').close(); });
 // 改名也用對話框（prompt 在 iPhone 加到主畫面的情況會被吃掉）
 let noting = null;
 function openNote(s){ noting = s; $('#noteTitle').textContent = `備註：${s.name}`; $('#noteText').value = s.note || ''; $('#noteDlg').showModal(); $('#noteText').focus(); }
@@ -973,6 +994,7 @@ function drawMarkers(){
 const gmMode = m => ({ DRIVING:'driving', TRANSIT:'transit', WALKING:'walking' })[m || state.mode];
 function gmapsUrl(seq){ const p = x => `${x.lat},${x.lng}`; return `https://www.google.com/maps/dir/?api=1&origin=${p(seq[0])}&destination=${p(seq[seq.length - 1])}&waypoints=${seq.slice(1, -1).map(p).join('|')}&travelmode=${gmMode()}`; }
 // 導航：不給 origin，Google Maps 會用目前位置
+function placeUrl(s){ return s.pid ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name)}&query_place_id=${s.pid}` : `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`; }
 function navUrl(s, mode){ return `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}${s.pid ? '&destination_place_id=' + s.pid : ''}&travelmode=${gmMode(mode)}`; }
 
 /* ============================================================ 一鍵排順 */
