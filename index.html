@@ -197,6 +197,24 @@
   .tx-title{font-size:12px;color:var(--muted);margin:12px 0 6px}
   .tx{font-size:15px;padding:8px 10px;background:#eef8f0;border-radius:8px;margin-bottom:6px}
 
+  @media print{
+    @page{margin:12mm}
+    body{display:block;height:auto;overflow:visible;background:#fff}
+    main,#divider,.toolbar,.search,#hint,.seg,#btnMenu,#btnShareTop,.go-top,#toast,dialog{display:none !important}
+    aside{border:0;display:block;height:auto}
+    header{padding:0 0 8px;border-bottom:2px solid #000;max-width:none}
+    #tripTitle{font-size:22px;padding:0}
+    #days{overflow:visible;padding:8px 0 0;max-width:none}
+    .day{break-inside:avoid;box-shadow:none !important;border:1px solid #bbb;margin-bottom:10px}
+    .day-head{background:#eee !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .today-tag{display:none}
+    .tl .p.tap{padding-right:0}
+    .tl .chev{display:none}
+    .go-exp{background:#fff8e6 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .settle{break-before:auto}
+    a[href]::after{content:""}
+  }
+
   main{position:relative}
   #map{position:absolute;inset:0}
   .map-ui{position:absolute;top:12px;left:12px;right:60px;display:flex;gap:8px;align-items:center;z-index:5;flex-wrap:wrap}
@@ -386,7 +404,6 @@
     <button id="btnNew">＋ 新旅程（把目前這份存成分享連結再開新的）</button>
     <button id="btnExport">下載行程 JSON 備份</button>
     <button id="btnImport">從 JSON 備份匯入</button>
-    <button id="btnKey">設定 AeroDataBox Key</button>
     <button id="btnClear" style="color:var(--danger)">清空整份行程</button>
   </div>
   <div class="row"><button onclick="menuDlg.close()">關閉</button></div>
@@ -841,11 +858,13 @@ function renderGo(wrap){
   top.innerHTML = `
     <button id="goMembers">👥 旅伴${members.length ? '：' + members.join('、') : '（先設定）'}</button>
     <button id="goRate">💱 ${state.currency}${state.rate ? ' ＝ ' + state.rate + ' TWD' : '，未設匯率'}</button>
-    <button id="goExpense" class="primary">＋ 記一筆（非景點）</button>`;
+    <button id="goExpense" class="primary">＋ 記一筆（非景點）</button>
+    <button id="goPdf" title="用列印存成 PDF">🖨 存成 PDF</button>`;
   wrap.appendChild(top);
   top.querySelector('#goMembers').onclick = editMembers;
   top.querySelector('#goRate').onclick = editRate;
   top.querySelector('#goExpense').onclick = () => openExpense({ di:todayIndex() });
+  top.querySelector('#goPdf').onclick = () => { toast('在列印視窗選「儲存為 PDF」'); setTimeout(() => window.print(), 300); };
 
   const expLine = (e, s) => { const d = document.createElement('div'); d.className = 'go-exp'; d.innerHTML = `<span></span><span class="who"></span>`; d.querySelector('span').textContent = `${fmtMoney(e.amount, e.cur)}${e.title && (!s || e.title !== s.name) ? ' ' + e.title : ''}`; d.querySelector('.who').textContent = `${e.paidBy} 付 · ${e.split.length === members.length ? '全員分' : e.split.join('、')}`; d.onclick = ev => { ev.stopPropagation(); openExpense(e); }; return d; };
 
@@ -1111,7 +1130,6 @@ $('#fApplyDep').addEventListener('click', async () => {
   if (ap) d.stops.push({ id:uid(), ...ap, stay:0, note:`${flightHit.no} ${flightHit.dep.t} 起飛${flightHit.dep.term ? ' ' + flightHit.dep.term + ' 航廈' : ''}，建議 ${addMin(flightHit.dep.t, -120)} 前到機場` });
   save(); render(); $('#flightDlg').close();
 });
-$('#btnKey').addEventListener('click', () => { const k = prompt('AeroDataBox 的 RapidAPI Key（留空清除，改用內建）', localStorage.getItem(RK) || ''); if (k === null) return; if (k.trim()) localStorage.setItem(RK, k.trim()); else localStorage.removeItem(RK); $('#menuDlg').close(); toast('已更新'); });
 
 /* ============================================================ 工具列 */
 $('#tripTitle').addEventListener('input', e => { state.title = e.target.value; save(); document.title = (state.title || '旅程規劃') + ' · 旅程規劃'; });
