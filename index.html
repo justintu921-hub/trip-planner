@@ -331,6 +331,12 @@
   </div>
 </dialog>
 
+<dialog id="askDlg">
+  <h3 id="askTitle"></h3>
+  <p id="askMsg" style="white-space:pre-wrap;color:var(--ink)"></p>
+  <div class="row"><button id="askOk" class="primary">確定</button><button id="askCancel">取消</button></div>
+</dialog>
+
 <dialog id="sheet">
   <div class="sheet-title" id="sheetTitle"></div>
   <div id="sheetBody"></div>
@@ -737,7 +743,7 @@ function render(){
     el.querySelector('input[type=time]').addEventListener('click', e => e.stopPropagation());
     el.querySelector('input[type=time]').addEventListener('change', e => { day.start = e.target.value; save(); render(); });
     const optBtn = el.querySelector('[data-opt]'); if (optBtn) optBtn.addEventListener('click', () => optimizeDay(di));
-    el.querySelector('[data-del-day]').addEventListener('click', () => { if (confirm(`確定${state.days.length === 1 ? '清空' : '刪除'}「${dayLabel(di)}」？`)) removeDay(di); });
+    el.querySelector('[data-del-day]').addEventListener('click', async () => { if (await ask(`確定${state.days.length === 1 ? '清空' : '刪除'}「${dayLabel(di)}」？`, state.days.length === 1 ? '清空這天' : '刪除這天', state.days.length === 1 ? '清空' : '刪除', true)) removeDay(di); });
 
     {
       const list = el.querySelector('.stops');
@@ -848,7 +854,7 @@ function openSheet(di, s){
     items.push(['⧉', '複製一份在下面', () => duplicateStop(di, s.id)]);
     items.push(["👜", "放回口袋", () => toPool(di, s.id)]);
   }
-  items.push(['🗑', '刪除', () => { if (confirm(`刪除「${s.name}」？`)) removeStop(di, s.id); }, 'danger']);
+  items.push(['🗑', '刪除', async () => { if (await ask(`刪除「${s.name}」？`, '刪除地點', '刪除', true)) removeStop(di, s.id); }, 'danger']);
   body.innerHTML = '';
   items.forEach(([ic, label, fn, cls]) => { const b = document.createElement('button'); b.className = 'sheet-item ' + (cls || ''); b.innerHTML = `<span class="ic">${ic}</span><span></span>`; b.lastChild.textContent = label; b.onclick = () => { sheet.close(); fn(); }; body.appendChild(b); });
   sheet.showModal();
@@ -1024,7 +1030,7 @@ $('#eSave').addEventListener('click', () => {
   else state.expenses.push({ id:uid(), di:+$('#expDlg').dataset.di, stopId:$('#expDlg').dataset.stop || null, ts:Date.now(), ...rec });
   save(); render(); $('#expDlg').close(); toast('已記帳');
 });
-$('#eDelete').addEventListener('click', () => { if (expEditing && confirm('刪除這筆？')) { state.expenses = state.expenses.filter(x => x !== expEditing); save(); render(); $('#expDlg').close(); } });
+$('#eDelete').addEventListener('click', async () => { if (expEditing && await ask('刪除這筆帳？', '刪除', '刪除', true)) { state.expenses = state.expenses.filter(x => x !== expEditing); save(); render(); $('#expDlg').close(); } });
 
 function drawMarkers(){
   markers.forEach(m => m.setMap(null)); markers = [];
@@ -1074,7 +1080,7 @@ async function optimizeDay(di){
     pinLast = stops.splice(far, 1)[0]; dest = pinLast; middle = stops;
   }
   if (!middle.length) return toast('沒有可以重排的中途點');
-  if (!confirm(`把「${dayLabel(di)}」依開車距離重排？\n\n注意：\n• 只看距離，不管營業時間、訂位時段\n• 一律用開車算，某段設了步行／大眾運輸也一樣\n• 頭尾（飯店${from || to ? '' : '或第一站'}）固定不動\n\n排完 8 秒內可以按「復原」。`)) return;
+  if (!confirm(`把「${dayLabel(di)}」依開車距離重排？\n\n注意：\n• 只看距離，不管營業時間、訂位時段\n• 一律用開車算，某段設了步行／大眾運輸也一樣\n• 頭尾（飯店${from || to ? '' : '或第一站'}）固定不動\n\n排完 8 秒內可以按「復原」。`, '一鍵排順', '重排')) return;
   toast('排順中…');
   try {
     const r = await dirService.route({ origin, destination:dest, waypoints:middle.map(s => ({ location:s, stopover:true })), optimizeWaypoints:true, travelMode:'DRIVING', language:'zh-TW' });
@@ -1193,7 +1199,7 @@ $('#btnNew').addEventListener('click', async () => {
 $('#btnExport').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type:'application/json' })); a.download = (state.title || 'trip') + '.json'; a.click(); $('#menuDlg').close(); });
 $('#btnImport').addEventListener('click', () => $('#fileIn').click());
 $('#fileIn').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { const s = JSON.parse(await f.text()); if (!s.days) throw 0; state = normalize(s); activeDay = 0; save(); render(); $('#menuDlg').close(); toast('已匯入'); } catch { toast('這個檔案不是行程備份'); } });
-$('#btnClear').addEventListener('click', () => { if (confirm('確定清空整份行程？無法復原。')) { state = blankState(); activeDay = 0; legCache.clear(); save(); render(); $('#menuDlg').close(); history.replaceState(null, '', location.pathname); } });
+$('#btnClear').addEventListener('click', async () => { if (await ask('確定清空整份行程？無法復原。', '清空', '清空', true)) { state = blankState(); activeDay = 0; legCache.clear(); save(); render(); $('#menuDlg').close(); history.replaceState(null, '', location.pathname); } });
 
 /* ---------- 拖拉分隔線 ---------- */
 (() => {
@@ -1210,6 +1216,16 @@ $('#btnClear').addEventListener('click', () => { if (confirm('確定清空整份
   dv.addEventListener('pointerup', end); dv.addEventListener('pointercancel', end);
   dv.addEventListener('dblclick', () => { root.style.removeProperty('--mapH'); root.style.removeProperty('--sidebar'); try { localStorage.removeItem('tp-mapH'); localStorage.removeItem('tp-sbW'); } catch(e){} if (map) google.maps.event.trigger(map, 'resize'); });
 })();
+
+// 取代瀏覽器內建 confirm()（內嵌瀏覽器／iPhone 主畫面模式不支援）
+function ask(msg, title = '確認', okText = '確定', danger = false){
+  return new Promise(res => {
+    $('#askTitle').textContent = title; $('#askMsg').textContent = msg; const ok = $('#askOk'); ok.textContent = okText; ok.style.background = danger ? 'var(--danger)' : ''; ok.style.borderColor = danger ? 'var(--danger)' : '';
+    const d = $('#askDlg'); const done = v => { d.close(); ok.onclick = null; $('#askCancel').onclick = null; d.oncancel = null; res(v); };
+    ok.onclick = () => done(true); $('#askCancel').onclick = () => done(false); d.oncancel = e => { e.preventDefault(); done(false); };
+    d.showModal();
+  });
+}
 
 let toastTimer;
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400); }
