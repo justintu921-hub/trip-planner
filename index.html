@@ -505,6 +505,7 @@ function render(){
       ${ld.lv >= 2 ? `<div class="day-warn l${ld.lv}">⚠ ${ld.warns.join('、')}</div>` : ''}
       ${view === 'list' ? `<div class="tl"></div>` : `<div class="stops" data-day="${di}"></div>`}
       <div class="day-foot">
+        ${day.stops.length >= 3 ? `<button data-opt title="依開車距離把這天排成最順的順序">✨ 一鍵排順</button>` : ''}
         ${st.seq.length > 1 ? `<a href="${gmapsUrl(st.seq)}" target="_blank" rel="noopener"><button>在 Google Maps 開整天</button></a>` : ''}
         <button class="ghost" data-del-day>${state.days.length === 1 ? '清空這天' : '刪除這天'}</button>
       </div>`;
@@ -516,6 +517,7 @@ function render(){
     el.querySelector('.hotelBtn').addEventListener('click', e => { e.stopPropagation(); openHotel(di); });
     el.querySelector('input[type=time]').addEventListener('click', e => e.stopPropagation());
     el.querySelector('input[type=time]').addEventListener('change', e => { day.start = e.target.value; save(); render(); });
+    const optBtn = el.querySelector('[data-opt]'); if (optBtn) optBtn.addEventListener('click', () => optimizeDay(di));
     el.querySelector('[data-del-day]').addEventListener('click', () => { if (confirm(`確定${state.days.length === 1 ? '清空' : '刪除'}「${dayLabel(di)}」？`)) removeDay(di); });
 
     if (view === 'list') {
@@ -652,6 +654,37 @@ const gmMode = m => ({ DRIVING:'driving', TRANSIT:'transit', WALKING:'walking' }
 function gmapsUrl(seq){ const p = x => `${x.lat},${x.lng}`; return `https://www.google.com/maps/dir/?api=1&origin=${p(seq[0])}&destination=${p(seq[seq.length - 1])}&waypoints=${seq.slice(1, -1).map(p).join('|')}&travelmode=${gmMode()}`; }
 // 導航：不給 origin，Google Maps 會用目前位置
 function navUrl(s, mode){ return `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}${s.pid ? '&destination_place_id=' + s.pid : ''}&travelmode=${gmMode(mode)}`; }
+
+/* ============================================================ 一鍵排順 */
+// 頭尾固定（有飯店就用飯店；沒有就固定第一站、把離起點最遠的當終點），中間交給 Google 排最短
+let lastOrder = null;
+async function optimizeDay(di){
+  const day = state.days[di], stops = day.stops.slice();
+  if (stops.length < 3) return;
+  if (stops.length > 25) return toast('一天最多 25 個地點才能排');
+  const from = di > 0 ? hotelOf(di - 1) : null, to = di < state.days.length - 1 ? hotelOf(di) : null;
+  let origin, dest, middle, pinFirst = null, pinLast = null;
+  if (from) origin = from; else { pinFirst = stops.shift(); origin = pinFirst; }
+  if (to) { dest = to; middle = stops; }
+  else {
+    const d2 = (a, b) => (a.lat - b.lat) ** 2 + ((a.lng - b.lng) * Math.cos(a.lat * Math.PI / 180)) ** 2;
+    let far = 0; stops.forEach((s, i) => { if (d2(origin, s) > d2(origin, stops[far])) far = i; });
+    pinLast = stops.splice(far, 1)[0]; dest = pinLast; middle = stops;
+  }
+  if (!middle.length) return toast('沒有可以重排的中途點');
+  toast('排順中…');
+  try {
+    const r = await dirService.route({ origin, destination:dest, waypoints:middle.map(s => ({ location:s, stopover:true })), optimizeWaypoints:true, travelMode:'DRIVING', language:'zh-TW' });
+    const order = r.routes[0].waypoint_order.map(i => middle[i]);
+    const next = [...(pinFirst ? [pinFirst] : []), ...order, ...(pinLast ? [pinLast] : [])];
+    if (next.every((s, i) => s.id === day.stops[i].id)) return toast('已經是最順的順序了');
+    lastOrder = { di, stops:day.stops };
+    day.stops = next; save(); render();
+    const t = $('#toast'); t.innerHTML = `已依開車距離重排 <button id="undoOpt" style="margin-left:8px;padding:2px 8px;font-size:12px;background:#fff">復原</button>`; t.style.pointerEvents = 'auto'; t.classList.add('show'); clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.classList.remove('show'); t.style.pointerEvents = ''; }, 8000);
+    $('#undoOpt').onclick = () => { if (lastOrder) { state.days[lastOrder.di].stops = lastOrder.stops; lastOrder = null; save(); render(); } t.classList.remove('show'); t.style.pointerEvents = ''; };
+  } catch(e) { console.warn(e); toast('排不出來：' + (e.code || e.message || e)); }
+}
 
 /* ============================================================ 住宿 */
 function openHotel(di){
