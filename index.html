@@ -91,7 +91,6 @@
   .stop-meta{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
   .stop-meta .arrive{background:#f0efeb;border-radius:6px;padding:2px 7px;font-variant-numeric:tabular-nums}
   .stop-meta input{font:inherit;font-size:12px;width:52px;border:1px solid var(--line);border-radius:6px;padding:2px 5px;text-align:right}
-  .stop-meta a.nav{color:var(--accent);text-decoration:none;font-size:12px;margin-left:auto;padding:2px 6px;border-radius:6px;border:1px solid #d4e3fb;background:#f3f7fd}
   .stop-note{width:100%;font:inherit;font-size:12px;border:0;border-bottom:1px dashed var(--line);background:transparent;padding:3px 0;margin-top:4px;color:var(--ink)}
   .stop-note::placeholder{color:#b5b3ad}
   .stop-note:focus{outline:0;border-bottom-color:var(--accent)}
@@ -119,7 +118,7 @@
   .tl .p small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
   .tl .lg{grid-column:2;font-size:12px;color:var(--muted);padding:4px 0 4px 8px;border-left:2px solid var(--line);margin-left:4px}
 
-  /* 景點池：小藥丸 */
+  /* 口袋名單：小藥丸 */
   .pool .day-head{background:#f0efeb}
   .pool.closed .day-head{border-bottom:0}
   .pool-list{display:flex;flex-wrap:wrap;gap:6px;padding:8px}
@@ -132,9 +131,20 @@
   .pill .pill-add{color:var(--accent);font-weight:700}
   .pool-list .empty{width:100%}
 
-  /* 卡片右邊只留一顆 ⋯ */
-  .stop-actions .more{width:34px;height:34px;padding:0;font-size:18px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--muted)}
+  /* 卡片右邊一直行：⋯ 和 🧭 同尺寸對齊 */
+  .stop-actions{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+  .stop-actions .more,.stop-actions .navbtn{width:36px;height:36px;padding:0;display:grid;place-items:center;font-size:18px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--muted);text-decoration:none;line-height:1}
   .stop-actions .more:hover{background:#f3f2ee;color:var(--ink)}
+  .stop-actions .navbtn{border-color:#d4e3fb;background:#f3f7fd;font-size:16px}
+  .stop-actions .navbtn:hover{background:#e8f0fe}
+  .stop.fixed .stop-actions{justify-content:center}
+
+  /* 出發模式的時間表列 */
+  .tl .p.tap{cursor:pointer;position:relative;padding-right:22px;border-radius:8px}
+  .tl .p.tap:hover,.tl .t:hover{background:#faf9f7}
+  .tl .p .chev{position:absolute;right:6px;top:50%;transform:translateY(-50%);color:#b5b3ad;font-size:20px}
+  .tl .t{cursor:pointer}
+  .sheet-note{font-size:13px;color:var(--muted);padding:10px 12px;white-space:pre-wrap;background:#faf9f7;border-radius:8px;margin-top:4px}
 
   /* 動作抽屜 */
   #sheet{padding:8px 8px 10px;max-width:420px}
@@ -292,6 +302,29 @@
   <button class="sheet-cancel" onclick="sheet.close()">取消</button>
 </dialog>
 
+<dialog id="membersDlg">
+  <h3>👥 旅伴</h3>
+  <p>名字用逗號、頓號或換行分開。第一個是預設付錢的人。</p>
+  <div class="field"><input type="text" id="mNames" placeholder="例如：Justin、消炎尼、史蒂芬"></div>
+  <div class="row"><button id="mSave" class="primary">儲存</button><button onclick="membersDlg.close()">取消</button></div>
+</dialog>
+
+<dialog id="rateDlg">
+  <h3>💱 幣別與匯率</h3>
+  <div style="display:flex;gap:8px">
+    <div class="field" style="width:120px"><label>主要幣別</label><input type="text" id="rCur" placeholder="JPY" autocapitalize="characters"></div>
+    <div class="field" style="flex:1"><label>1 單位 ＝ 多少台幣（留空不換算）</label><input type="text" inputmode="decimal" id="rRate" placeholder="例如日圓 0.22"></div>
+  </div>
+  <p>台幣記的帳會用這個匯率換成主要幣別一起算；結算也會順便顯示台幣。</p>
+  <div class="row"><button id="rSave" class="primary">儲存</button><button onclick="rateDlg.close()">取消</button></div>
+</dialog>
+
+<dialog id="renameDlg">
+  <h3>✏️ 改名</h3>
+  <div class="field"><input type="text" id="nName"></div>
+  <div class="row"><button id="nSave" class="primary">儲存</button><button onclick="renameDlg.close()">取消</button></div>
+</dialog>
+
 <dialog id="expDlg">
   <h3 id="eDlgTitle">記一筆</h3>
   <div class="field"><label>項目</label><input type="text" id="eTitle" placeholder="例如：門票、晚餐、租車"></div>
@@ -326,6 +359,7 @@
 <dialog id="menuDlg">
   <h3>更多</h3>
   <div style="display:flex;flex-direction:column;gap:8px">
+    <button id="btnNew">＋ 新旅程（把目前這份存成分享連結再開新的）</button>
     <button id="btnExport">下載行程 JSON 備份</button>
     <button id="btnImport">從 JSON 備份匯入</button>
     <button id="btnKey">設定 AeroDataBox Key</button>
@@ -346,11 +380,11 @@ const COLORS = ['#1a73e8','#e8710a','#188038','#9334e6','#d93025','#0b8043','#f9
 const MODES = { DRIVING:'🚗', TRANSIT:'🚌', WALKING:'🚶' };
 const blankState = () => ({ title:'', mode:'DRIVING', startDate:'', days:[{ start:'09:00', stops:[] }], pool:[], members:[], currency:'JPY', rate:null, expenses:[], done:{} });
 let state = blankState();
-// activeDay === -1 代表「景點池」
+// activeDay === -1 代表「口袋名單」
 let activeDay = 0, view = 'map', showAll = false, replacing = null, inserting = null, hotelFor = null, poolOpen = true;
 function normalize(s){ s.pool ||= []; s.members ||= []; s.currency ||= 'JPY'; s.expenses ||= []; s.done ||= {}; if (s.rate === undefined) s.rate = null; return s; }
 const listOf = di => di < 0 ? state.pool : state.days[di].stops;
-const targetLabel = di => di < 0 ? '景點池' : dayLabel(di);
+const targetLabel = di => di < 0 ? '口袋名單' : dayLabel(di);
 let map, dirService, markers = [], lines = [], placesLib;
 const legCache = new Map();
 
@@ -481,7 +515,7 @@ const newStop = p => ({ id:uid(), name:p.name, addr:p.addr || '', lat:p.lat, lng
 function addStop(p, di = activeDay){ listOf(di).push(newStop(p)); if (di < 0) poolOpen = true; save(); render(); toast(`已加入 ${targetLabel(di)}：${p.name}`); }
 function removeStop(di, id){ const l = listOf(di), i = l.findIndex(s => s.id === id); if (i >= 0) l.splice(i, 1); save(); render(); }
 function duplicateStop(di, id){ const list = listOf(di), i = list.findIndex(s => s.id === id); list.splice(i + 1, 0, { ...list[i], id:uid() }); save(); render(); toast('已複製一份在下面，拖到想要的位置'); }
-function toPool(di, id){ const l = listOf(di), i = l.findIndex(s => s.id === id); if (i < 0) return; const [s] = l.splice(i, 1); state.pool.push(s); poolOpen = true; save(); render(); toast(`「${s.name}」放回景點池`); }
+function toPool(di, id){ const l = listOf(di), i = l.findIndex(s => s.id === id); if (i < 0) return; const [s] = l.splice(i, 1); state.pool.push(s); poolOpen = true; save(); render(); toast(`「${s.name}」放回口袋`); }
 function startReplace(di, id){ inserting = null; replacing = { di, id }; render(); $('#q').focus(); }
 function startInsert(di, index){ replacing = null; inserting = { di, index }; render(); $('#q').focus(); }
 function cancelPick(){ if (replacing || inserting) { replacing = inserting = null; render(); } }
@@ -577,7 +611,7 @@ function render(){
   const hint = $('#hint'); hint.className = 'hint' + (replacing ? ' replace' : inserting ? ' insert' : '');
   if (replacing) { const s = listOf(replacing.di).find(x => x.id === replacing.id); hint.innerHTML = `搜尋新地點來取代「${s ? s.name : ''}」 <button id="cancelPick">取消</button>`; }
   else if (inserting) { hint.innerHTML = `搜尋地點，會插入 ${dayLabel(inserting.di)} 的第 ${inserting.index + 1} 站 <button id="cancelPick">取消</button>`; }
-  else hint.textContent = view === 'go' ? '出發模式：打勾、導航、記帳，最下面結算。' : activeDay < 0 ? '搜尋結果會丟進景點池，之後拖進各天，或按池子裡的 ＋。' : '搜尋結果會加到目前選取那天的最後。段落上的 ＋ 可以插在中間。';
+  else hint.textContent = view === 'go' ? '出發模式：點任一站可以導航、記帳，最下面是結算。' : activeDay < 0 ? '搜尋結果會丟進口袋，之後拖進各天，或按口袋裡的 ＋。' : '搜尋結果會加到目前選取那天的最後。段落上的 ＋ 可以插在中間。';
   if ($('#cancelPick')) $('#cancelPick').onclick = cancelPick;
 
   const wrap = $('#days'); wrap.innerHTML = '';
@@ -588,21 +622,21 @@ function render(){
     rendering = false; if (pendingRender) { pendingRender = false; requestAnimationFrame(render); } return;
   }
 
-  /* ---- 景點池 ---- */
+  /* ---- 口袋名單 ---- */
   if (view === 'map') {
     const pool = document.createElement('section');
     pool.className = 'day pool' + (activeDay < 0 ? ' active' : '') + (poolOpen ? '' : ' closed'); pool.style.setProperty('--dc', '#6b6b66');
     pool.innerHTML = `
       <div class="day-head">
         <span class="day-dot"></span>
-        <span class="day-name">🧺 景點池 <small style="font-weight:400;color:var(--muted)">${state.pool.length} 個 · 先收集，再拖進各天</small></span>
+        <span class="day-name">👜 口袋名單 <small style="font-weight:400;color:var(--muted)">${state.pool.length} 個 · 先收集，再拖進各天</small></span>
         <button class="ghost" data-toggle>${poolOpen ? '收合' : '展開'}</button>
       </div>
       <div class="stops pool-list" data-day="-1" ${poolOpen ? '' : 'hidden'}></div>`;
     pool.querySelector('.day-head').addEventListener('click', () => { if (activeDay !== -1) { lastReal = activeDay; activeDay = -1; render(); } });
     pool.querySelector('[data-toggle]').addEventListener('click', e => { e.stopPropagation(); poolOpen = !poolOpen; try { localStorage.setItem('tp-pool', poolOpen ? '1' : '0'); } catch(e){} render(); });
     const pl = pool.querySelector('.pool-list');
-    if (!state.pool.length) pl.innerHTML = `<div class="empty">${activeDay < 0 ? '用上面的搜尋把想去的地方丟進來' : '點這裡的標題，再搜尋就會加進池子'}</div>`;
+    if (!state.pool.length) pl.innerHTML = `<div class="empty">${activeDay < 0 ? '用上面的搜尋把想去的地方丟進來' : '點這裡的標題，再搜尋就會放進口袋'}</div>`;
     state.pool.forEach(s => {
       const pill = document.createElement('div'); pill.className = 'stop pill'; pill.dataset.id = s.id;
       pill.innerHTML = `<span class="pill-name"></span><button class="pill-add" title="加到 ${dayLabel(lastRealDay())}">＋</button><button class="pill-more" title="更多">⋯</button>`;
@@ -676,7 +710,7 @@ function render(){
   if (pendingRender) { pendingRender = false; requestAnimationFrame(render); }
 }
 
-// 拖拉結束：from/to 可能是 -1（景點池）。飯店固定卡不在 stops 裡，所以要把 DOM 索引換算成 stops 索引
+// 拖拉結束：from/to 可能是 -1（口袋名單）。飯店固定卡不在 stops 裡，所以要把 DOM 索引換算成 stops 索引
 function onDragEnd(evt){
   const from = +evt.from.dataset.day, to = +evt.to.dataset.day;
   const idxIn = (container, el) => [...container.querySelectorAll('.stop:not(.fixed)')].indexOf(el);
@@ -718,11 +752,13 @@ function stopEl(day, di, r){
       <div class="stop-meta">
         ${inPool ? '' : `<span class="arrive">${r.arrive} ${s.fixed === 'from' ? '出發' : '抵達'}</span>`}
         ${fixed ? `<span>${s.fixed === 'from' ? '從飯店出發' : '回飯店'}</span>` : `<span>停留 <input type="text" inputmode="numeric" pattern="[0-9]*" value="${s.stay}"> 分</span>`}
-        <a class="nav" href="${navUrl(s, r.mode)}" target="_blank" rel="noopener" title="從目前位置導航到這裡">導航 ↗</a>
       </div>
       ${fixed ? '' : '<input class="stop-note" placeholder="備註：訂位、門票、想吃什麼…">'}
     </div>
-    ${fixed ? '<div></div>' : `<div class="stop-actions"><button class="more" title="更多">⋯</button></div>`}`;
+    <div class="stop-actions">
+      ${fixed ? '' : '<button class="more" title="更多">⋯</button>'}
+      <a class="navbtn" href="${navUrl(s, r.mode)}" target="_blank" rel="noopener" title="從目前位置導航到這裡">🧭</a>
+    </div>`;
   const nameEl = el.querySelector('.stop-name'); nameEl.textContent = s.name;
   el.querySelector('.stop-addr').textContent = s.addr;
   if (!fixed) {
@@ -751,12 +787,12 @@ function openSheet(di, s){
   $('#sheetTitle').textContent = s.name;
   const items = [];
   if (inPool) items.push(['➕', `加到 ${dayLabel(lastRealDay())}`, () => { const d = lastRealDay(); state.pool.splice(state.pool.indexOf(s), 1); state.days[d].stops.push(s); save(); render(); }]);
-  items.push(['✏️', '改名', () => { const v = prompt('新名稱', s.name); if (v && v.trim()) { s.name = v.trim(); save(); render(); } }]);
+  items.push(['✏️', '改名', () => renameDlg(s)]);
   items.push(['⇄', '換成別的地點（保留停留、備註）', () => startReplace(di, s.id)]);
   if (!inPool) {
     items.push(['⧉', '複製一份在下面', () => duplicateStop(di, s.id)]);
     items.push(['＋', '在這之後插入一站', () => startInsert(di, state.days[di].stops.indexOf(s) + 1)]);
-    items.push(['🧺', '放回景點池', () => toPool(di, s.id)]);
+    items.push(["👜", "放回口袋", () => toPool(di, s.id)]);
   }
   items.push(['🗑', '刪除', () => { if (confirm(`刪除「${s.name}」？`)) removeStop(di, s.id); }, 'danger']);
   body.innerHTML = '';
@@ -782,6 +818,8 @@ function renderGo(wrap){
   top.querySelector('#goRate').onclick = editRate;
   top.querySelector('#goExpense').onclick = () => openExpense({ di:todayIndex() });
 
+  const expLine = (e, s) => { const d = document.createElement('div'); d.className = 'go-exp'; d.innerHTML = `<span></span><span class="who"></span>`; d.querySelector('span').textContent = `${fmtMoney(e.amount, e.cur)}${e.title && (!s || e.title !== s.name) ? ' ' + e.title : ''}`; d.querySelector('.who').textContent = `${e.paidBy} 付 · ${e.split.length === members.length ? '全員分' : e.split.join('、')}`; d.onclick = ev => { ev.stopPropagation(); openExpense(e); }; return d; };
+
   state.days.forEach((day, di) => {
     const st = dayStats(di), isToday = dayDate(di) === today, dayExp = state.expenses.filter(e => e.di === di);
     const el = document.createElement('section'); el.className = 'day go-day' + (isToday ? ' today' : ''); el.style.setProperty('--dc', dayColor(di)); if (isToday) el.id = 'todayCard';
@@ -789,38 +827,27 @@ function renderGo(wrap){
     el.innerHTML = `
       <div class="day-head" style="cursor:default"><span class="day-dot"></span><span class="day-name">${dayLabel(di)}${isToday ? ' <span class="today-tag">今天</span>' : ''}</span>
         <span style="font-size:12px;color:var(--muted)">${day.start || '09:00'} 出發${dayExp.length ? ' · 花 ' + fmtMoney(sum) : ''}</span></div>
-      <div class="go-list"></div>`;
-    const list = el.querySelector('.go-list');
-    if (!st.seq.length) list.innerHTML = '<div class="empty">這天沒有行程</div>';
+      <div class="tl"></div>`;
+    const tl = el.querySelector('.tl');
+    if (!st.seq.length) tl.innerHTML = '<div class="empty" style="grid-column:1/-1">這天沒有行程</div>';
     st.rows.forEach(r => {
-      if (r.type === 'leg') { const l = document.createElement('div'); l.className = 'go-leg'; l.textContent = !r.c ? `${MODES[r.mode]} …` : r.c.err ? `${MODES[r.mode]} 查不到` : `${MODES[r.mode]} ${fmtDur(r.c.sec)} · ${fmtDist(r.c.m)}`; list.appendChild(l); return; }
-      const s = r.s, done = !!state.done[s.id], exps = state.expenses.filter(e => e.stopId === s.id);
-      const row = document.createElement('div'); row.className = 'go-stop' + (done ? ' done' : '');
-      row.innerHTML = `
-        <label class="chk"><input type="checkbox" ${done ? 'checked' : ''}></label>
-        <div class="go-body">
-          <div class="go-name">${s.fixed ? '🏨 ' : ''}<b></b> <span class="go-time">${r.arrive}</span></div>
-          ${s.note ? `<div class="go-note"></div>` : ''}
-          <div class="go-exps"></div>
-        </div>
-        <div class="go-actions">
-          <a class="nav" href="${navUrl(s, r.mode)}" target="_blank" rel="noopener">導航</a>
-          <button class="exp">＋ 記一筆</button>
-        </div>`;
-      row.querySelector('.go-name b').textContent = s.name;
-      if (s.note) row.querySelector('.go-note').textContent = s.note;
-      row.querySelector('input').addEventListener('change', e => { if (e.target.checked) state.done[s.id] = 1; else delete state.done[s.id]; save(); row.classList.toggle('done', e.target.checked); });
-      row.querySelector('.exp').onclick = () => openExpense({ di, stopId:s.id, title:s.name });
-      const ex = row.querySelector('.go-exps');
-      exps.forEach(e => { const d = document.createElement('div'); d.className = 'go-exp'; d.innerHTML = `<span></span><span class="who"></span>`; d.querySelector('span').textContent = `${fmtMoney(e.amount, e.cur)}${e.title && e.title !== s.name ? ' ' + e.title : ''}`; d.querySelector('.who').textContent = `${e.paidBy} 付 · ${e.split.length === members.length ? '全員分' : e.split.join('、')}`; d.onclick = () => openExpense(e); ex.appendChild(d); });
-      list.appendChild(row);
+      if (r.type === 'leg') { const l = document.createElement('div'); l.className = 'lg'; l.textContent = !r.c ? `${MODES[r.mode]} …` : r.c.err ? `${MODES[r.mode]} 查不到` : `${MODES[r.mode]} ${fmtDur(r.c.sec)} · ${fmtDist(r.c.m)}`; tl.appendChild(l); return; }
+      const s = r.s, exps = state.expenses.filter(e => e.stopId === s.id);
+      const t = document.createElement('div'); t.className = 't'; t.textContent = r.arrive; tl.appendChild(t);
+      const p = document.createElement('div'); p.className = 'p tap'; p.innerHTML = '<b></b><small></small><div class="go-exps"></div><span class="chev">›</span>';
+      p.querySelector('b').textContent = s.fixed ? `🏨 ${s.name}${s.fixed === 'from' ? '（出發）' : '（回飯店）'}` : `${r.n}. ${s.name}`;
+      p.querySelector('small').textContent = [s.stay ? `停留 ${s.stay} 分` : '', s.note].filter(Boolean).join(' · ');
+      exps.forEach(e => p.querySelector('.go-exps').appendChild(expLine(e, s)));
+      p.onclick = () => openGoSheet(di, s, r.mode);
+      tl.appendChild(p);
+      t.onclick = p.onclick;
     });
     const other = dayExp.filter(e => !e.stopId);
     if (other.length) {
-      const o = document.createElement('div'); o.className = 'go-stop other'; o.innerHTML = '<div></div><div class="go-body"><div class="go-name"><b>其他花費</b></div><div class="go-exps"></div></div><div></div>';
-      const ex = o.querySelector('.go-exps');
-      other.forEach(e => { const d = document.createElement('div'); d.className = 'go-exp'; d.innerHTML = `<span></span><span class="who"></span>`; d.querySelector('span').textContent = `${fmtMoney(e.amount, e.cur)} ${e.title || ''}`; d.querySelector('.who').textContent = `${e.paidBy} 付 · ${e.split.length === members.length ? '全員分' : e.split.join('、')}`; d.onclick = () => openExpense(e); ex.appendChild(d); });
-      list.appendChild(o);
+      const t = document.createElement('div'); t.className = 't'; tl.appendChild(t);
+      const p = document.createElement('div'); p.className = 'p'; p.innerHTML = '<b>其他花費</b><div class="go-exps"></div>';
+      other.forEach(e => p.querySelector('.go-exps').appendChild(expLine(e)));
+      tl.appendChild(p);
     }
     wrap.appendChild(el);
   });
@@ -852,17 +879,27 @@ function settlementEl(){
     </div>`;
   return el;
 }
+// 出發模式點一列：導航、記帳、看地址、（有帳的話）逐筆修改
+function openGoSheet(di, s, mode){
+  const sheet = $('#sheet'), body = $('#sheetBody'); $('#sheetTitle').textContent = s.name; body.innerHTML = '';
+  const add = (ic, label, fn, cls) => { const b = document.createElement('button'); b.className = 'sheet-item ' + (cls || ''); b.innerHTML = `<span class="ic">${ic}</span><span></span>`; b.lastChild.textContent = label; b.onclick = () => { sheet.close(); fn(); }; body.appendChild(b); };
+  add('🧭', '導航到這裡（從目前位置）', () => window.open(navUrl(s, mode), '_blank'));
+  add('💴', '記一筆', () => openExpense({ di, stopId:s.id, title:s.name }));
+  if (s.pid || s.addr) add('📍', '在 Google Maps 看這個地方', () => window.open(s.pid ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name)}&query_place_id=${s.pid}` : `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`, '_blank'));
+  const exps = state.expenses.filter(e => e.stopId === s.id);
+  exps.forEach(e => add('✏️', `修改：${fmtMoney(e.amount, e.cur)} ${e.title || ''}（${e.paidBy} 付）`, () => openExpense(e)));
+  if (s.note) { const n = document.createElement('div'); n.className = 'sheet-note'; n.textContent = s.note; body.appendChild(n); }
+  sheet.showModal();
+}
 function todayIndex(){ const t = todayStr(); const i = state.days.findIndex((_, di) => dayDate(di) === t); return i >= 0 ? i : activeDay >= 0 ? activeDay : 0; }
-function editMembers(){
-  const v = prompt('旅伴名字，用逗號或頓號分開（第一個當預設付錢的人）', state.members.join('、')); if (v === null) return;
-  state.members = v.split(/[,，、\s]+/).map(x => x.trim()).filter(Boolean); save(); render();
-}
-function editRate(){
-  const cur = prompt('主要幣別代碼（JPY、TWD、KRW、USD…）', state.currency); if (cur === null) return;
-  state.currency = cur.trim().toUpperCase() || 'JPY';
-  if (state.currency !== 'TWD') { const r = prompt(`1 ${state.currency} ＝ 多少台幣？（例如日圓填 0.22；留空不換算）`, state.rate || ''); if (r !== null) state.rate = parseFloat(r) || null; }
-  save(); render();
-}
+function editMembers(){ $('#mNames').value = state.members.join('、'); $('#membersDlg').showModal(); $('#mNames').focus(); }
+$('#mSave').addEventListener('click', () => { state.members = $('#mNames').value.split(/[,，、\s\n]+/).map(x => x.trim()).filter(Boolean); save(); render(); $('#membersDlg').close(); if (!state.members.length) toast('沒有填到名字'); });
+function editRate(){ $('#rCur').value = state.currency; $('#rRate').value = state.rate || ''; $('#rateDlg').showModal(); }
+$('#rSave').addEventListener('click', () => { state.currency = ($('#rCur').value.trim().toUpperCase() || 'JPY'); state.rate = parseFloat($('#rRate').value) || null; save(); render(); $('#rateDlg').close(); });
+// 改名也用對話框（prompt 在 iPhone 加到主畫面的情況會被吃掉）
+let renaming = null;
+function renameDlg(s){ renaming = s; $('#nName').value = s.name; $('#renameDlg').showModal(); $('#nName').select(); }
+$('#nSave').addEventListener('click', () => { const v = $('#nName').value.trim(); if (renaming && v) { renaming.name = v; save(); render(); } $('#renameDlg').close(); });
 let expEditing = null;
 function openExpense(e){
   if (!state.members.length) { editMembers(); if (!state.members.length) return; }
@@ -901,9 +938,9 @@ function drawMarkers(){
       if (active) { bounds.extend(m.getPosition()); any = true; }
     });
   });
-  // 景點池：空心灰圈，池子被選取時用深一點
+  // 口袋名單：空心灰圈，池子被選取時用深一點
   state.pool.forEach(s => {
-    const m = new google.maps.Marker({ map, position:{ lat:s.lat, lng:s.lng }, title:`🧺 ${s.name}`, icon:{ path:google.maps.SymbolPath.CIRCLE, scale:activeDay < 0 ? 9 : 6, fillColor:'#fff', fillOpacity:.9, strokeColor:activeDay < 0 ? '#1d1d1b' : '#9a9a94', strokeWeight:2 }, zIndex:activeDay < 0 ? 8 : 1 });
+    const m = new google.maps.Marker({ map, position:{ lat:s.lat, lng:s.lng }, title:`👜 ${s.name}`, icon:{ path:google.maps.SymbolPath.CIRCLE, scale:activeDay < 0 ? 9 : 6, fillColor:'#fff', fillOpacity:.9, strokeColor:activeDay < 0 ? '#1d1d1b' : '#9a9a94', strokeWeight:2 }, zIndex:activeDay < 0 ? 8 : 1 });
     m.addListener('click', () => { activeDay = -1; render(); }); markers.push(m);
     if (activeDay < 0) { bounds.extend(m.getPosition()); any = true; }
   });
@@ -1043,6 +1080,11 @@ $('#btnShare').addEventListener('click', async () => {
 });
 $('#btnCopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('#shareUrl').value); toast('已複製，貼給旅伴吧'); } catch(e) { $('#shareUrl').select(); document.execCommand('copy'); toast('已複製'); } });
 $('#btnMenu').addEventListener('click', () => $('#menuDlg').showModal());
+$('#btnNew').addEventListener('click', async () => {
+  const url = shareUrl(); try { await navigator.clipboard.writeText(url); } catch(e){}
+  if (!confirm(`目前這份「${state.title || '未命名'}」的分享連結已複製到剪貼簿，先貼到記事本存起來。\n\n確定開一份全新的空白旅程？`)) return;
+  state = blankState(); activeDay = 0; legCache.clear(); save(); try { localStorage.removeItem(KEY + ':trip'); } catch(e){} render(); $('#menuDlg').close(); history.replaceState(null, '', location.pathname); toast('已開新旅程');
+});
 $('#btnExport').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type:'application/json' })); a.download = (state.title || 'trip') + '.json'; a.click(); $('#menuDlg').close(); });
 $('#btnImport').addEventListener('click', () => $('#fileIn').click());
 $('#fileIn').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { const s = JSON.parse(await f.text()); if (!s.days) throw 0; state = normalize(s); activeDay = 0; save(); render(); $('#menuDlg').close(); toast('已匯入'); } catch { toast('這個檔案不是行程備份'); } });
