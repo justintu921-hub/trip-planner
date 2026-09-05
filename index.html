@@ -215,6 +215,11 @@
     a[href]::after{content:""}
   }
 
+  .sync{width:10px;height:10px;border-radius:50%;background:#b5b3ad;flex:none;margin:0 2px}
+  .sync.on{background:var(--ok);box-shadow:0 0 0 3px #e6f4ea}
+  .sync.busy{background:#f9ab00;box-shadow:0 0 0 3px #fef7e0}
+  .sync.off{background:var(--danger);box-shadow:0 0 0 3px #fce8e6}
+
   main{position:relative}
   #map{position:absolute;inset:0}
   .map-ui{position:absolute;top:12px;left:12px;right:60px;display:flex;gap:8px;align-items:center;z-index:5;flex-wrap:wrap}
@@ -275,6 +280,7 @@
     <div class="title-row">
       <input id="tripTitle" placeholder="旅程名稱" spellcheck="false">
       <span class="seg"><button id="vMap" class="on">規劃</button><button id="vGo">出發</button></span>
+      <span id="syncDot" class="sync" hidden title="共筆同步狀態"></span>
       <button class="ghost" id="btnShareTop" title="分享" hidden>📤</button>
       <button class="ghost" id="btnMenu" title="更多">⋯</button>
     </div>
@@ -311,7 +317,7 @@
 
 <dialog id="shareDlg">
   <h3>分享給旅伴</h3>
-  <p>整份行程都壓在這個連結裡，旅伴打開就能看、也能改。對方改完再把新連結傳回來即可。</p>
+  <p id="shareHint">整份行程都壓在這個連結裡，旅伴打開就能看、也能改。對方改完再把新連結傳回來即可。</p>
   <textarea id="shareUrl" readonly></textarea>
   <div class="row"><button id="btnCopy" class="primary">複製連結</button><button onclick="shareDlg.close()">關閉</button></div>
 </dialog>
@@ -407,6 +413,8 @@
 <dialog id="menuDlg">
   <h3>更多</h3>
   <div style="display:flex;flex-direction:column;gap:8px">
+    <button id="btnRoom" class="primary">☁ 建立共筆連結（旅伴一起即時編輯）</button>
+    <button id="btnLeaveRoom" hidden>離開共筆，改回只存在這台裝置</button>
     <button id="btnNew">＋ 新旅程（把目前這份存成分享連結再開新的）</button>
     <button id="btnExport">下載行程 JSON 備份</button>
     <button id="btnImport">從 JSON 備份匯入</button>
@@ -427,6 +435,7 @@ const COLORS = ['#1a73e8','#e8710a','#188038','#9334e6','#d93025','#0b8043','#f9
 const MODES = { DRIVING:'🚗', TRANSIT:'🚌', WALKING:'🚶' };
 const blankState = () => ({ title:'', mode:'DRIVING', startDate:'', days:[{ start:'09:00', stops:[] }], pool:[], members:[], currency:'JPY', rate:null, expenses:[], done:{} });
 let state = blankState();
+const roomId = (new URLSearchParams(location.search).get('room') || '').replace(/[^A-Za-z0-9]/g, '') || null;
 // activeDay === -1 代表「口袋名單」
 let activeDay = 0, view = 'map', showAll = false, replacing = null, inserting = null, hotelFor = null, poolOpen = true;
 function normalize(s){ s.pool ||= []; s.members ||= []; s.currency ||= 'JPY'; s.expenses ||= []; s.done ||= {}; if (s.rate === undefined) s.rate = null; return s; }
@@ -436,6 +445,7 @@ let map, dirService, markers = [], lines = [], placesLib;
 const legCache = new Map();
 
 const uid = () => Math.random().toString(36).slice(2, 9);
+const loadScript = src => new Promise((ok, no) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const t = document.createElement('script'); t.src = src; t.onload = ok; t.onerror = () => no(new Error('載入失敗')); document.head.appendChild(t); });
 const $ = s => document.querySelector(s);
 const dayColor = i => COLORS[i % COLORS.length];
 const WD = ['日','一','二','三','四','五','六'];
@@ -465,6 +475,7 @@ function seqOf(di){
 const legMode = s => s.modeTo || state.mode;
 
 function load(){
+  if (roomId) { try { const c = JSON.parse(localStorage.getItem(KEY + ':room:' + roomId)); if (c && c.days) state = normalize(c); } catch(e){} return; }
   const h = location.hash.slice(1);
   if (h.startsWith('t=')) { try { const s = JSON.parse(LZString.decompressFromEncodedURIComponent(h.slice(2))); if (s && s.days) { state = normalize(s); save(); toast('已載入分享的行程'); return; } } catch(e){} }
   try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.days) state = normalize(s); } catch(e){}
@@ -474,10 +485,12 @@ let hashTimer;
 function save(){
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){}
   // 同步寫進網址：把網頁加入書籤或加到主畫面，那個連結本身就是存檔
+  if (roomId) { schedulePush(); return; }
   clearTimeout(hashTimer); hashTimer = setTimeout(() => { try { history.replaceState(null, '', location.pathname + location.search + '#t=' + LZString.compressToEncodedURIComponent(JSON.stringify(state))); } catch(e){} }, 800);
 }
-function shareUrl(){ return location.origin + location.pathname + '#t=' + LZString.compressToEncodedURIComponent(JSON.stringify(state)); }
+function shareUrl(){ return roomId ? location.origin + location.pathname + '?room=' + roomId : location.origin + location.pathname + '#t=' + LZString.compressToEncodedURIComponent(JSON.stringify(state)); }
 async function loadNamedTrip(){
+  if (roomId) return;
   const name = new URLSearchParams(location.search).get('trip');
   if (!name || !/^[\w-]+$/.test(name)) return;
   try {
@@ -523,7 +536,7 @@ async function initMap(){
   });
   $('#badge').textContent = '搜尋地點，或點地圖上的景點加入';
   render();
-  loadNamedTrip();
+  if (roomId) { $('#btnRoom').hidden = true; $('#btnLeaveRoom').hidden = false; joinRoom(); } else loadNamedTrip();
 }
 
 /* ---------- 搜尋 ---------- */
@@ -839,6 +852,84 @@ function stopEl(day, di, r){
   return el;
 }
 
+/* ============================================================ 共筆（Firebase Firestore）
+   rooms/{id}：meta（標題、模式、日期、旅伴、幣別、口袋）、d0…dN（每天一個欄位，改哪天只推哪天）、n（天數）
+   rooms/{id}/expenses/{expId}：每筆帳一份文件，只加不覆蓋
+   房間 id 是隨機 20 碼，規則不允許列出房間，沒連結的人猜不到 */
+const FB = { apiKey:"AIzaSyA-rR0sV9iR_vS6_-a8jXEm2Zlj1bt3k9A", authDomain:"trip-planner-a006c.firebaseapp.com", projectId:"trip-planner-a006c", storageBucket:"trip-planner-a006c.firebasestorage.app", messagingSenderId:"1069726229577", appId:"1:1069726229577:web:b88d3e992c3b5cf1e50b98" };
+let db = null, roomRef = null, pushTimer = null, lastSent = {}, applying = false;
+const META_KEYS = ['title','mode','startDate','members','currency','rate','rateDate','pool'];
+const planKeys = () => { const meta = {}; META_KEYS.forEach(k => meta[k] = state[k] ?? null); const o = { meta, n:state.days.length }; state.days.forEach((d, i) => o['d' + i] = d); return o; };
+const setSync = cls => { const el = $('#syncDot'); el.hidden = !roomId; el.className = 'sync ' + cls; el.title = { on:'共筆已同步', busy:'同步中…', off:'離線，恢復連線會自動補上' }[cls] || ''; };
+// Firestore 不吃 undefined：存的時候 undefined → 缺欄位（用 JSON 轉一次就會掉）；hotel 的 undefined 要特別標記
+function toCloud(v){ return JSON.parse(JSON.stringify(v)); }
+function cloudDay(d){ const o = toCloud(d); if (d.hotel === undefined) delete o.hotel; else if (d.hotel === null) o.hotel = null; return o; }
+async function initFirebase(){
+  if (db) return db;
+  await loadScript('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
+  await loadScript('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js');
+  if (!firebase.apps.length) firebase.initializeApp(FB);
+  db = firebase.firestore();
+  try { await db.enablePersistence({ synchronizeTabs:true }); } catch(e) { console.warn('persistence', e.code); }
+  return db;
+}
+function cloudPlan(){ const o = planKeys(); const out = { meta:toCloud(o.meta), n:o.n }; state.days.forEach((d, i) => out['d' + i] = cloudDay(d)); return out; }
+async function joinRoom(){
+  await initFirebase(); roomRef = db.collection('rooms').doc(roomId); setSync('busy');
+  roomRef.onSnapshot({ includeMetadataChanges:true }, snap => {
+    if (!snap.exists) { setSync('off'); toast('找不到這份共筆，連結可能不對'); return; }
+    setSync(snap.metadata.fromCache && !navigator.onLine ? 'off' : snap.metadata.hasPendingWrites ? 'busy' : 'on');
+    if (snap.metadata.hasPendingWrites) return;  // 自己剛送出的回音
+    const d = snap.data(); let changed = false;
+    applying = true;
+    const meta = d.meta || {};
+    for (const k of META_KEYS) { if (k in meta && JSON.stringify(meta[k]) !== JSON.stringify(state[k] ?? null)) { state[k] = meta[k]; changed = true; } }
+    const n = d.n ?? state.days.length; const days = [];
+    for (let i = 0; i < n; i++) days.push(d['d' + i] ? d['d' + i] : (state.days[i] || { start:'09:00', stops:[] }));
+    if (JSON.stringify(days.map(cloudDay)) !== JSON.stringify(state.days.map(cloudDay))) { state.days = days; changed = true; }
+    lastSent = cloudPlan(); applying = false;
+    if (changed) { try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){} if (activeDay >= state.days.length) activeDay = state.days.length - 1; render(); }
+  }, err => { console.error(err); setSync('off'); toast('共筆連線失敗：' + err.code); });
+  roomRef.collection('expenses').onSnapshot(snap => {
+    const list = snap.docs.map(x => x.data()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    if (JSON.stringify(list) !== JSON.stringify(state.expenses)) { state.expenses = list; try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){} render(); }
+  });
+  window.addEventListener('online', () => setSync('busy')); window.addEventListener('offline', () => setSync('off'));
+}
+function schedulePush(){
+  if (!roomRef || applying) return;
+  try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){}
+  clearTimeout(pushTimer); pushTimer = setTimeout(pushPlan, 700);
+}
+async function pushPlan(){
+  const cur = cloudPlan(), diff = {};
+  for (const k of Object.keys(cur)) if (JSON.stringify(cur[k]) !== JSON.stringify(lastSent[k])) diff[k] = cur[k];
+  for (const k of Object.keys(lastSent)) if (/^d\d+$/.test(k) && !(k in cur)) diff[k] = firebase.firestore.FieldValue.delete();
+  if (!Object.keys(diff).length) return;
+  setSync('busy');
+  try {
+    // 用 update 而不是 merge：整天欄位整個換掉（避免舊的 hotel 殘留），meta 也是
+    await roomRef.update({ ...diff, updatedAt:firebase.firestore.FieldValue.serverTimestamp() }); lastSent = cur; setSync('on');
+  } catch(e) { console.error(e); setSync('off'); toast('同步失敗：' + (e.code || e.message)); }
+}
+function pushExpense(e){ if (roomRef) roomRef.collection('expenses').doc(e.id).set(toCloud(e)); }
+function deleteExpense(id){ if (roomRef) roomRef.collection('expenses').doc(id).delete(); }
+async function createRoom(){
+  if (!await ask('會把目前這份行程放上雲端，產生一條共筆連結。拿到連結的人都能一起編輯、記帳，改動即時同步。\n\n之後這台裝置打開共筆連結就是同一份。', '建立共筆', '建立')) return;
+  toast('建立中…');
+  try {
+    await initFirebase();
+    const id = [...crypto.getRandomValues(new Uint8Array(20))].map(b => 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'[b % 55]).join('');
+    const ref = db.collection('rooms').doc(id);
+    await ref.set({ ...cloudPlan(), createdAt:firebase.firestore.FieldValue.serverTimestamp(), updatedAt:firebase.firestore.FieldValue.serverTimestamp() });
+    const batch = db.batch(); state.expenses.forEach(e => batch.set(ref.collection('expenses').doc(e.id), toCloud(e))); await batch.commit();
+    try { localStorage.setItem(KEY + ':room:' + id, JSON.stringify(state)); } catch(e){}
+    location.href = location.pathname + '?room=' + id;
+  } catch(e) { console.error(e); toast('建立失敗：' + (e.code || e.message)); }
+}
+$('#btnRoom').addEventListener('click', () => { $('#menuDlg').close(); createRoom(); });
+$('#btnLeaveRoom').addEventListener('click', async () => { if (!await ask('離開後這台裝置會保留目前內容，但不再同步；共筆本身還在，用連結可以再回來。', '離開共筆', '離開')) return; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} location.href = location.pathname; });
+
 /* ============================================================ 卡片動作選單（手機是底部抽屜） */
 let lastReal = 0;
 function lastRealDay(){ return activeDay >= 0 ? activeDay : Math.min(lastReal, state.days.length - 1); }
@@ -862,7 +953,6 @@ function openSheet(di, s){
 $('#sheet').addEventListener('click', e => { if (e.target === $('#sheet')) $('#sheet').close(); });
 
 /* ============================================================ 下載 PDF（html2canvas + jsPDF，動態載入） */
-const loadScript = src => new Promise((ok, no) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const t = document.createElement('script'); t.src = src; t.onload = ok; t.onerror = () => no(new Error('載入失敗')); document.head.appendChild(t); });
 async function exportPdf(){
   toast('產生 PDF 中…');
   try {
@@ -1026,11 +1116,12 @@ $('#eSave').addEventListener('click', () => {
   const amount = parseFloat($('#eAmount').value); if (!(amount > 0)) return toast('金額要大於 0');
   const split = [...document.querySelectorAll('#eSplit input:checked')].map(i => i.value); if (!split.length) return toast('至少要分給一個人');
   const rec = { title:$('#eTitle').value.trim(), amount, cur:$('#eCur').value, paidBy:$('#ePaid').value, split, note:$('#eNote').value.trim() };
-  if (expEditing) Object.assign(expEditing, rec);
-  else state.expenses.push({ id:uid(), di:+$('#expDlg').dataset.di, stopId:$('#expDlg').dataset.stop || null, ts:Date.now(), ...rec });
-  save(); render(); $('#expDlg').close(); toast('已記帳');
+  let target;
+  if (expEditing) { Object.assign(expEditing, rec); target = expEditing; }
+  else { target = { id:uid(), di:+$('#expDlg').dataset.di, stopId:$('#expDlg').dataset.stop || null, ts:Date.now(), ...rec }; state.expenses.push(target); }
+  pushExpense(target); save(); render(); $('#expDlg').close(); toast('已記帳');
 });
-$('#eDelete').addEventListener('click', async () => { if (expEditing && await ask('刪除這筆帳？', '刪除', '刪除', true)) { state.expenses = state.expenses.filter(x => x !== expEditing); save(); render(); $('#expDlg').close(); } });
+$('#eDelete').addEventListener('click', async () => { if (expEditing && await ask('刪除這筆帳？', '刪除', '刪除', true)) { deleteExpense(expEditing.id); state.expenses = state.expenses.filter(x => x !== expEditing); save(); render(); $('#expDlg').close(); } });
 
 function drawMarkers(){
   markers.forEach(m => m.setMap(null)); markers = [];
@@ -1185,7 +1276,8 @@ $('#vGo').addEventListener('click', () => { view = 'go'; $('#days')._scrolled = 
 $('#showAll').addEventListener('change', e => { showAll = e.target.checked; drawMarkers(); });
 $('#btnShareTop').addEventListener('click', () => $('#btnShare').click());
 $('#btnShare').addEventListener('click', async () => {
-  const url = shareUrl(); $('#shareUrl').value = url; history.replaceState(null, '', url.slice(url.indexOf('#')));
+  const url = shareUrl(); $('#shareUrl').value = url; if (!roomId) history.replaceState(null, '', url.slice(url.indexOf('#')));
+  $('#shareHint').textContent = roomId ? '這是共筆連結：旅伴打開就跟你編輯同一份，改動幾秒內互相同步。拿到連結的人都能改，只貼給旅伴。' : '整份行程都壓在這個連結裡，旅伴打開就能看、也能改。對方改完再把新連結傳回來即可。';
   if (navigator.share && /Mobi|Android/i.test(navigator.userAgent)) { try { await navigator.share({ title:state.title || '旅程規劃', url }); return; } catch(e){} }
   $('#shareDlg').showModal();
 });
