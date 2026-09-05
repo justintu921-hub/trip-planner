@@ -399,13 +399,13 @@
 <dialog id="flightDlg">
   <h3>✈️ 用航班號帶入時間</h3>
   <div class="field"><label>航班號（例如 BR112、CI120、JX822）</label><input type="text" id="fNo" placeholder="BR112" autocapitalize="characters"></div>
-  <div class="field"><label>日期</label><input type="date" id="fDate"></div>
+  <div class="field"><label>日期（會自動加到行程中對應的那一天）</label><input type="date" id="fDate"></div>
   <div class="field" id="fKeyWrap" hidden><label>內建額度用完了？可以貼自己的 RapidAPI Key（只存在這台裝置）</label><input type="password" id="fKey" placeholder="貼上 RapidAPI Key"></div>
   <div id="fRes"></div>
   <div class="row">
     <button id="fLookup" class="primary">查詢</button>
-    <button id="fApplyArr" hidden>抵達：設為這天出發時間並加機場</button>
-    <button id="fApplyDep" hidden>出發：加機場到這天最後</button>
+    <button id="fApplyArr" hidden>抵達：設為那天出發時間並加機場</button>
+    <button id="fApplyDep" hidden>出發：加機場到那天最後</button>
     <button onclick="flightDlg.close()">關閉</button>
   </div>
 </dialog>
@@ -456,7 +456,7 @@ function dayLabel(di){
   if (state.startDate) { const dt = new Date(state.startDate + 'T00:00:00'); dt.setDate(dt.getDate() + di); return `Day ${di+1} · ${dt.getMonth()+1}/${dt.getDate()} (${WD[dt.getDay()]})`; }
   return `Day ${di+1}`;
 }
-function dayDate(di){ if (!state.startDate) return ''; const dt = new Date(state.startDate + 'T00:00:00'); dt.setDate(dt.getDate() + di); return dt.toISOString().slice(0,10); }
+function dayDate(di){ if (!state.startDate) return ''; const dt = new Date(state.startDate + 'T00:00:00'); dt.setDate(dt.getDate() + di); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; }  // 用本地日期，不能用 toISOString（會變成 UTC 少一天）
 
 // 住宿：day.hotel === undefined → 跟前一天一樣；null → 不回飯店；物件 → 這天住這
 function hotelOf(di){ for (let i = di; i >= 0; i--) { const h = state.days[i].hotel; if (h !== undefined) return h; } return null; }
@@ -712,14 +712,14 @@ function render(){
     if (!state.pool.length) pl.innerHTML = `<div class="empty">${activeDay < 0 ? '用上面的搜尋把想去的地方丟進來' : '點這裡的標題，再搜尋就會放進口袋'}</div>`;
     state.pool.forEach(s => {
       const pill = document.createElement('div'); pill.className = 'stop pill'; pill.dataset.id = s.id;
-      pill.innerHTML = `<span class="pill-name"></span><button class="pill-add" title="加到 ${dayLabel(lastRealDay())}">＋</button><button class="pill-more" title="更多">⋯</button>`;
+      pill.innerHTML = `<span class="pill-name"></span><button class="pill-add" title="加到某一天">＋</button><button class="pill-more" title="更多">⋯</button>`;
       pill.querySelector('.pill-name').textContent = s.name;
       pill.querySelector('.pill-name').onclick = () => { if (map) { map.panTo({ lat:s.lat, lng:s.lng }); if (map.getZoom() < 13) map.setZoom(13); } };
-      pill.querySelector('.pill-add').onclick = () => { const di = lastRealDay(); state.pool.splice(state.pool.indexOf(s), 1); state.days[di].stops.push(s); save(); render(); toast(`已加到 ${dayLabel(di)}：${s.name}`); };
+      pill.querySelector('.pill-add').onclick = () => openDayPicker(s);
       pill.querySelector('.pill-more').onclick = () => openSheet(-1, s);
       pl.appendChild(pill);
     });
-    new Sortable(pl, { group:'stops', animation:160, draggable:'.stop', delay:120, delayOnTouchOnly:true, filter:'button', preventOnFilter:false, onEnd:onDragEnd });
+    new Sortable(pl, { group:'stops', animation:160, draggable:'.stop', delay:120, delayOnTouchOnly:true, filter:'button', preventOnFilter:false, scroll:$('#days'), scrollSensitivity:90, scrollSpeed:18, bubbleScroll:true, forceAutoScrollFallback:true, onEnd:onDragEnd });
     wrap.appendChild(pool);
   }
 
@@ -770,7 +770,7 @@ function render(){
         const e = document.createElement('div'); e.className = 'empty'; e.innerHTML = `這天還沒有行程 <button class="ins" style="padding:2px 8px;font-size:12px">＋ 插入</button>`;
         e.querySelector('button').onclick = () => startInsert(di, 0); list.appendChild(e);
       }
-      new Sortable(list, { group:'stops', animation:160, draggable:'.stop:not(.fixed)', delay:120, delayOnTouchOnly:true, filter:'input,textarea,button,select,a,[contenteditable]', preventOnFilter:false, onEnd:onDragEnd });
+      new Sortable(list, { group:'stops', animation:160, draggable:'.stop:not(.fixed)', delay:120, delayOnTouchOnly:true, filter:'input,textarea,button,select,a,[contenteditable]', preventOnFilter:false, scroll:$('#days'), scrollSensitivity:90, scrollSpeed:18, bubbleScroll:true, forceAutoScrollFallback:true, onEnd:onDragEnd });
     }
     wrap.appendChild(el);
   });
@@ -933,11 +933,23 @@ $('#btnLeaveRoom').addEventListener('click', async () => { if (!await ask('離�
 /* ============================================================ 卡片動作選單（手機是底部抽屜） */
 let lastReal = 0;
 function lastRealDay(){ return activeDay >= 0 ? activeDay : Math.min(lastReal, state.days.length - 1); }
+// 口袋 → 選要加到哪一天（列出每一天，附目前幾站）
+function openDayPicker(s){
+  const sheet = $('#sheet'), body = $('#sheetBody'); $('#sheetTitle').textContent = `「${s.name}」要加到哪一天？`; body.innerHTML = '';
+  state.days.forEach((d, di) => {
+    const b = document.createElement('button'); b.className = 'sheet-item';
+    b.innerHTML = `<span class="ic" style="color:${dayColor(di)}">●</span><span></span><small style="margin-left:auto;color:var(--muted)">${d.stops.length} 站</small>`;
+    b.children[1].textContent = dayLabel(di);
+    b.onclick = () => { sheet.close(); state.pool.splice(state.pool.indexOf(s), 1); d.stops.push(s); activeDay = di; save(); render(); toast(`已加到 ${dayLabel(di)} 最後：${s.name}`); };
+    body.appendChild(b);
+  });
+  sheet.showModal();
+}
 function openSheet(di, s){
   const inPool = di < 0, sheet = $('#sheet'), body = $('#sheetBody');
   $('#sheetTitle').textContent = s.name;
   const items = [];
-  if (inPool) items.push(['➕', `加到 ${dayLabel(lastRealDay())}`, () => { const d = lastRealDay(); state.pool.splice(state.pool.indexOf(s), 1); state.days[d].stops.push(s); save(); render(); }]);
+  if (inPool) items.push(['➕', '加到某一天…', () => openDayPicker(s)]);
   items.push(['✏️', '改名', () => renameDlg(s)]);
   items.push(['📝', s.note ? '看／改備註' : '加備註', () => openNote(s)]);
   items.push(['⇄', '換成別的地點（保留停留、備註）', () => startReplace(di, s.id)]);
@@ -1253,17 +1265,18 @@ async function airportPlace(s){
   if (s.lat) return { name:`${s.ap} 機場${s.iata ? ' (' + s.iata + ')' : ''}`, addr:'', lat:s.lat, lng:s.lng, pid:'' };
   return null;
 }
+function flightDay(){ const date = $('#fDate').value; const i = state.days.findIndex((_, di) => dayDate(di) === date); if (i >= 0) return i; toast(`${date} 不在行程日期內，加到 ${dayLabel(activeDay >= 0 ? activeDay : 0)}`); return activeDay >= 0 ? activeDay : 0; }
 $('#fApplyArr').addEventListener('click', async () => {
-  const d = state.days[activeDay]; d.start = addMin(flightHit.arr.t, 40);
+  const di = flightDay(), d = state.days[di]; activeDay = di; d.start = addMin(flightHit.arr.t, 40);
   const ap = await airportPlace(flightHit.arr);
   if (ap) d.stops.unshift({ id:uid(), ...ap, stay:0, note:`${flightHit.no} ${flightHit.arr.t} 抵達${flightHit.arr.term ? ' ' + flightHit.arr.term + ' 航廈' : ''}（出發時間已含 40 分入境領行李）` });
-  save(); render(); $('#flightDlg').close(); toast(`${dayLabel(activeDay)} 出發時間設為 ${d.start}`);
+  save(); render(); $('#flightDlg').close(); toast(`${dayLabel(di)} 出發時間設為 ${d.start}`);
 });
 $('#fApplyDep').addEventListener('click', async () => {
-  const d = state.days[activeDay];
+  const di = flightDay(), d = state.days[di]; activeDay = di;
   const ap = await airportPlace(flightHit.dep);
   if (ap) d.stops.push({ id:uid(), ...ap, stay:0, note:`${flightHit.no} ${flightHit.dep.t} 起飛${flightHit.dep.term ? ' ' + flightHit.dep.term + ' 航廈' : ''}，建議 ${addMin(flightHit.dep.t, -120)} 前到機場` });
-  save(); render(); $('#flightDlg').close();
+  save(); render(); $('#flightDlg').close(); toast(`已加到 ${dayLabel(di)} 最後`);
 });
 
 /* ============================================================ 工具列 */
