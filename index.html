@@ -124,7 +124,9 @@
   .tl .lg{grid-column:2;font-size:12px;color:var(--muted);padding:4px 0 4px 8px;border-left:2px solid var(--line);margin-left:4px}
 
   /* 口袋名單：小藥丸 */
+  .pool{position:sticky;top:0;z-index:6;box-shadow:0 4px 10px -6px rgba(0,0,0,.25)}
   .pool .day-head{background:#f0efeb}
+  .pool-list{max-height:132px;overflow:auto}
   .pool.closed .day-head{border-bottom:0}
   .pool-list{display:flex;flex-wrap:wrap;gap:6px;padding:8px}
   .pill{display:inline-flex;align-items:center;gap:2px;padding:0 2px 0 10px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:13px;cursor:grab;max-width:100%}
@@ -436,6 +438,9 @@ const COLORS = ['#1a73e8','#e8710a','#188038','#9334e6','#d93025','#0b8043','#f9
 const MODES = { DRIVING:'🚗', TRANSIT:'🚌', WALKING:'🚶' };
 const blankState = () => ({ title:'', mode:'DRIVING', startDate:'', days:[{ start:'09:00', stops:[] }], pool:[], members:[], currency:'JPY', rate:null, expenses:[], done:{} });
 let state = blankState();
+let lastKeys = {};
+const stable = v => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x)) ? Object.keys(x).sort().reduce((o, kk) => (o[kk] = x[kk], o), {}) : x);
+const META_KEYS = ['title','mode','startDate','members','currency','rate','rateDate','pool'];
 const roomId = (new URLSearchParams(location.search).get('room') || '').replace(/[^A-Za-z0-9]/g, '') || null;
 // activeDay === -1 代表「口袋名單」
 let activeDay = 0, view = 'map', showAll = false, replacing = null, inserting = null, hotelFor = null, poolOpen = true;
@@ -483,9 +488,16 @@ function load(){
   try { poolOpen = localStorage.getItem('tp-pool') !== '0'; } catch(e){}
 }
 let hashTimer, undoStack = [], lastSaved = null, skipUndo = false;
+// 復原的單位：meta（標題、旅伴、口袋…）、每一天 d0…dN、天數 n。帳不進復原（有自己的確認）
+function undoKeys(){ const o = { meta:{} }; META_KEYS.forEach(k => o.meta[k] = state[k] ?? null); o.n = state.days.length; state.days.forEach((d, i) => o['d' + i] = d); return JSON.parse(JSON.stringify(o)); }
 function save(){
   const now = JSON.stringify(state);
-  if (!skipUndo && lastSaved !== null && now !== lastSaved) { undoStack.push(lastSaved); if (undoStack.length > 30) undoStack.shift(); }
+  if (!skipUndo && lastSaved !== null && now !== lastSaved) {
+    const cur = undoKeys(), entry = { before:{}, after:{} }; let any = false;
+    for (const k of new Set([...Object.keys(cur), ...Object.keys(lastKeys)])) { if (stable(cur[k]) !== stable(lastKeys[k])) { entry.before[k] = lastKeys[k]; entry.after[k] = cur[k]; any = true; } }
+    if (any) { undoStack.push(entry); if (undoStack.length > 30) undoStack.shift(); }
+    lastKeys = cur;
+  } else if (lastSaved === null || skipUndo) lastKeys = undoKeys();
   lastSaved = now; updateUndoBtn();
   try { localStorage.setItem(KEY, now); } catch(e){}
   // 同步寫進網址：把網頁加入書籤或加到主畫面，那個連結本身就是存檔
@@ -678,7 +690,7 @@ let rendering = false, pendingRender = false;
 function render(){
   if (rendering) { pendingRender = true; return; }
   rendering = true;
-  if (lastSaved === null) lastSaved = JSON.stringify(state);
+  if (lastSaved === null) { lastSaved = JSON.stringify(state); lastKeys = undoKeys(); }
   $('#tripTitle').value = state.title;
   document.title = (state.title || '旅程規劃') + ' · 旅程規劃';
   $('#mode').value = state.mode; $('#startDate').value = state.startDate || '';
@@ -863,8 +875,7 @@ function stopEl(day, di, r){
    rooms/{id}/expenses/{expId}：每筆帳一份文件，只加不覆蓋
    房間 id 是隨機 20 碼，規則不允許列出房間，沒連結的人猜不到 */
 const FB = { apiKey:"AIzaSyA-rR0sV9iR_vS6_-a8jXEm2Zlj1bt3k9A", authDomain:"trip-planner-a006c.firebaseapp.com", projectId:"trip-planner-a006c", storageBucket:"trip-planner-a006c.firebasestorage.app", messagingSenderId:"1069726229577", appId:"1:1069726229577:web:b88d3e992c3b5cf1e50b98" };
-let db = null, roomRef = null, pushTimer = null, lastSent = {}, applying = false;
-const META_KEYS = ['title','mode','startDate','members','currency','rate','rateDate','pool'];
+let db = null, roomRef = null, pushTimer = null, lastSent = {}, applying = false, dirty = false;
 const planKeys = () => { const meta = {}; META_KEYS.forEach(k => meta[k] = state[k] ?? null); const o = { meta, n:state.days.length }; state.days.forEach((d, i) => o['d' + i] = d); return o; };
 const setSync = cls => { const el = $('#syncDot'); el.hidden = !roomId; el.className = 'sync ' + cls; el.title = { on:'共筆已同步', busy:'同步中…', off:'離線，恢復連線會自動補上' }[cls] || ''; };
 // Firestore 不吃 undefined：存的時候 undefined → 缺欄位（用 JSON 轉一次就會掉）；hotel 的 undefined 要特別標記
@@ -886,6 +897,17 @@ async function joinRoom(){
     if (!snap.exists) { setSync('off'); toast('找不到這份共筆，連結可能不對'); return; }
     setSync(snap.metadata.fromCache && !navigator.onLine ? 'off' : snap.metadata.hasPendingWrites ? 'busy' : 'on');
     if (snap.metadata.hasPendingWrites) return;  // 自己剛送出的回音
+    if (dirty) return;  // 本機還有沒送出的改動，等送完再收
+    applyRemote(snap);
+  }, err => { console.error(err); setSync('off'); toast('共筆連線失敗：' + err.code); });
+  roomRef.collection('expenses').onSnapshot(snap => {
+    const list = snap.docs.map(x => x.data()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    if (JSON.stringify(list) !== JSON.stringify(state.expenses)) { state.expenses = list; lastSaved = JSON.stringify(state); try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){} render(); }
+  });
+  window.addEventListener('online', () => setSync('busy')); window.addEventListener('offline', () => setSync('off'));
+}
+function applyRemote(snap){
+  {
     const d = snap.data(); let changed = false;
     applying = true;
     const meta = d.meta || {};
@@ -894,30 +916,27 @@ async function joinRoom(){
     for (let i = 0; i < n; i++) days.push(d['d' + i] ? d['d' + i] : (state.days[i] || { start:'09:00', stops:[] }));
     if (JSON.stringify(days.map(cloudDay)) !== JSON.stringify(state.days.map(cloudDay))) { state.days = days; changed = true; }
     lastSent = cloudPlan(); applying = false;
-    if (changed) { lastSaved = JSON.stringify(state); undoStack = []; updateUndoBtn(); }
+    if (changed) { lastSaved = JSON.stringify(state); lastKeys = undoKeys(); }
     if (changed) { try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){} if (activeDay >= state.days.length) activeDay = state.days.length - 1; render(); }
-  }, err => { console.error(err); setSync('off'); toast('共筆連線失敗：' + err.code); });
-  roomRef.collection('expenses').onSnapshot(snap => {
-    const list = snap.docs.map(x => x.data()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
-    if (JSON.stringify(list) !== JSON.stringify(state.expenses)) { state.expenses = list; lastSaved = JSON.stringify(state); try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){} render(); }
-  });
-  window.addEventListener('online', () => setSync('busy')); window.addEventListener('offline', () => setSync('off'));
+  }
 }
 function schedulePush(){
   if (!roomRef || applying) return;
   try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){}
-  clearTimeout(pushTimer); pushTimer = setTimeout(pushPlan, 700);
+  dirty = true; clearTimeout(pushTimer); pushTimer = setTimeout(pushPlan, 700);
 }
 async function pushPlan(){
   const cur = cloudPlan(), diff = {};
   for (const k of Object.keys(cur)) if (JSON.stringify(cur[k]) !== JSON.stringify(lastSent[k])) diff[k] = cur[k];
   for (const k of Object.keys(lastSent)) if (/^d\d+$/.test(k) && !(k in cur)) diff[k] = firebase.firestore.FieldValue.delete();
-  if (!Object.keys(diff).length) return;
+  if (!Object.keys(diff).length) { dirty = false; return; }
   setSync('busy');
   try {
     // 用 update 而不是 merge：整天欄位整個換掉（避免舊的 hotel 殘留），meta 也是
-    await roomRef.update({ ...diff, updatedAt:firebase.firestore.FieldValue.serverTimestamp() }); lastSent = cur; setSync('on');
-  } catch(e) { console.error(e); setSync('off'); toast('同步失敗：' + (e.code || e.message)); }
+    await roomRef.update({ ...diff, updatedAt:firebase.firestore.FieldValue.serverTimestamp() }); lastSent = cur; dirty = false; setSync('on');
+    // 送出期間若有別人的更新被擋下，補抓一次最新的
+    roomRef.get().then(sn => { if (!dirty && sn.exists) applyRemote(sn); });
+  } catch(e) { console.error(e); setSync('off'); toast('同步失敗：' + (e.code || e.message)); dirty = false; }
 }
 function pushExpense(e){ if (roomRef) roomRef.collection('expenses').doc(e.id).set(toCloud(e)); }
 function deleteExpense(id){ if (roomRef) roomRef.collection('expenses').doc(id).delete(); }
@@ -1342,12 +1361,21 @@ function ask(msg, title = '確認', okText = '確定', danger = false){
 
 function undo(){
   if (!undoStack.length) return toast('沒有可以復原的');
-  const prev = undoStack.pop(); skipUndo = true;
-  try { state = normalize(JSON.parse(prev)); } finally { skipUndo = false; }
-  lastSaved = null; save(); lastSaved = prev;  // 這次不再推進 undo 堆疊
+  const entry = undoStack.pop(), cur = undoKeys(); let applied = 0, skipped = 0;
+  const next = { ...cur };
+  for (const k of Object.keys(entry.after)) {
+    if (stable(cur[k]) === stable(entry.after[k])) { if (entry.before[k] === undefined) delete next[k]; else next[k] = entry.before[k]; applied++; }
+    else skipped++;  // 這部分在我改完之後別人又改過，不動
+  }
+  if (!applied) { updateUndoBtn(); return toast('這一步的內容已經被旅伴改過，不復原'); }
+  // 從 keys 組回 state
+  if (next.meta) META_KEYS.forEach(k => { state[k] = next.meta[k] === null && (k === 'rate') ? null : next.meta[k]; });
+  const n = next.n ?? state.days.length, days = [];
+  for (let i = 0; i < n; i++) days.push(next['d' + i] || state.days[i] || { start:'09:00', stops:[] });
+  state.days = days; state = normalize(state);
   if (activeDay >= state.days.length) activeDay = state.days.length - 1;
-  if (roomRef) state.expenses.forEach(pushExpense);
-  render(); toast(`已復原${undoStack.length ? `，還可以再退 ${undoStack.length} 步` : ''}`);
+  skipUndo = true; save(); skipUndo = false;
+  render(); toast(`已復原${skipped ? `（有 ${skipped} 部分旅伴改過，沒動）` : ''}${undoStack.length ? `，還可以再退 ${undoStack.length} 步` : ''}`);
   updateUndoBtn();
 }
 function updateUndoBtn(){ const b = $('#btnUndo'); if (b) b.hidden = !undoStack.length; }
