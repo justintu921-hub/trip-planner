@@ -1080,7 +1080,7 @@ async function optimizeDay(di){
     pinLast = stops.splice(far, 1)[0]; dest = pinLast; middle = stops;
   }
   if (!middle.length) return toast('沒有可以重排的中途點');
-  if (!confirm(`把「${dayLabel(di)}」依開車距離重排？\n\n注意：\n• 只看距離，不管營業時間、訂位時段\n• 一律用開車算，某段設了步行／大眾運輸也一樣\n• 頭尾（飯店${from || to ? '' : '或第一站'}）固定不動\n\n排完 8 秒內可以按「復原」。`, '一鍵排順', '重排')) return;
+  if (!await ask(`把「${dayLabel(di)}」依開車距離重排？\n\n注意：\n• 只看距離，不管營業時間、訂位時段\n• 一律用開車算，某段設了步行／大眾運輸也一樣\n• 頭尾（飯店${from || to ? '' : '或第一站'}）固定不動\n\n排完 8 秒內可以按「復原」。`, '一鍵排順', '重排')) return;
   toast('排順中…');
   try {
     const r = await dirService.route({ origin, destination:dest, waypoints:middle.map(s => ({ location:s, stopover:true })), optimizeWaypoints:true, travelMode:'DRIVING', language:'zh-TW' });
