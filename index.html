@@ -184,7 +184,7 @@
   <h3>✈️ 用航班號帶入時間</h3>
   <div class="field"><label>航班號（例如 BR112、CI120、JX822）</label><input type="text" id="fNo" placeholder="BR112" autocapitalize="characters"></div>
   <div class="field"><label>日期</label><input type="date" id="fDate"></div>
-  <div class="field" id="fKeyWrap"><label>AeroDataBox 的 RapidAPI Key（只存在你這台裝置的瀏覽器）</label><input type="password" id="fKey" placeholder="貼上 RapidAPI Key"></div>
+  <div class="field" id="fKeyWrap" hidden><label>內建額度用完了？可以貼自己的 RapidAPI Key（只存在這台裝置）</label><input type="password" id="fKey" placeholder="貼上 RapidAPI Key"></div>
   <div id="fRes"></div>
   <div class="row">
     <button id="fLookup" class="primary">查詢</button>
@@ -211,6 +211,9 @@
 <script>
 /* ============================================================ 狀態 */
 const KEY = 'trip-planner-v1', RK = 'tp-rapidapi-key';
+// AeroDataBox（RapidAPI BASIC 免費方案，未綁卡，額度用完只會查不到）。瀏覽器裡若另存了 key 會優先用
+const DEFAULT_RAPIDAPI_KEY = '6fc269739cmsh4cc83422a43b35ap1d02f2jsnf80478945884';
+const rapidKey = () => localStorage.getItem(RK) || DEFAULT_RAPIDAPI_KEY;
 const COLORS = ['#1a73e8','#e8710a','#188038','#9334e6','#d93025','#0b8043','#f9ab00','#007b83'];
 let state = { title:'', mode:'DRIVING', startDate:'', days:[{ start:'09:00', stops:[] }] };
 let activeDay = 0, view = 'map', showAll = false, replacing = null;  // replacing = {di,id}
@@ -568,15 +571,15 @@ const lt = t => { if (!t) return ''; const s = t.local || t.utc || t; const m = 
 let flightHit = null;
 $('#btnFlight').addEventListener('click', () => {
   $('#fDate').value = dayDate(activeDay) || state.startDate || new Date().toISOString().slice(0, 10);
-  const k = localStorage.getItem(RK) || ''; $('#fKey').value = k; $('#fKeyWrap').hidden = !!k;
+  $('#fKey').value = localStorage.getItem(RK) || ''; $('#fKeyWrap').hidden = true;
   $('#fRes').innerHTML = ''; $('#fApplyArr').hidden = $('#fApplyDep').hidden = true; flightHit = null;
   $('#flightDlg').showModal(); $('#fNo').focus();
 });
 $('#fLookup').addEventListener('click', async () => {
-  const no = $('#fNo').value.trim().toUpperCase().replace(/\s+/g, ''), date = $('#fDate').value, key = $('#fKey').value.trim();
+  const no = $('#fNo').value.trim().toUpperCase().replace(/\s+/g, ''), date = $('#fDate').value, typed = $('#fKey').value.trim();
   if (!no || !date) return toast('請填航班號和日期');
-  if (!key) { $('#fKeyWrap').hidden = false; return toast('請先貼上 RapidAPI Key'); }
-  localStorage.setItem(RK, key); $('#fKeyWrap').hidden = true;
+  if (typed) localStorage.setItem(RK, typed);
+  const key = rapidKey();
   $('#fRes').innerHTML = '<div class="flight-res">查詢中…</div>';
   try {
     const fl = await lookupFlight(no, date, key);
@@ -587,7 +590,7 @@ $('#fLookup').addEventListener('click', async () => {
     const term = s => s.term ? `（${s.term} 航廈）` : '';
     $('#fRes').innerHTML = `<div class="flight-res"><b>${flightHit.no}</b> ${flightHit.airline || ''}<br>🛫 ${flightHit.dep.ap} ${flightHit.dep.t || '?'}${term(flightHit.dep)}<br>🛬 ${flightHit.arr.ap} ${flightHit.arr.t || '?'}${term(flightHit.arr)}<br><small>時間都是當地時間${fl.length > 1 ? `；這天有 ${fl.length} 個航段，取第一段` : ''}</small></div>`;
     $('#fApplyArr').hidden = !flightHit.arr.t; $('#fApplyDep').hidden = !flightHit.dep.t;
-  } catch(e) { $('#fRes').innerHTML = `<div class="flight-res">${e.message}</div>`; }
+  } catch(e) { $('#fRes').innerHTML = `<div class="flight-res">${e.message}</div>`; if (/40[13]|429/.test(e.message)) $('#fKeyWrap').hidden = false; }
 });
 // 機場座標：優先用 AeroDataBox 回傳的，沒有再問 Google
 async function airportPlace(s){
