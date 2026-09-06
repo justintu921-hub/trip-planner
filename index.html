@@ -373,6 +373,8 @@
   <h3>👥 旅伴</h3>
   <p>名字用逗號、頓號或換行分開。第一個是預設付錢的人。</p>
   <div class="field"><input type="text" id="mNames" placeholder="例如：Justin、消炎尼、史蒂芬"></div>
+  <div class="field" id="mWhoWrap" hidden><label>我是（共筆會記錄是誰改的，只是標記）</label><div class="opts" id="mWho" style="flex-direction:row;flex-wrap:wrap;gap:12px;margin-top:4px"></div></div>
+  <p style="margin-top:4px">旅伴名單用在記帳分攤；共筆時也用來標記是誰改的。</p>
   <div class="row"><button id="mSave" class="primary">儲存</button><button onclick="membersDlg.close()">取消</button></div>
 </dialog>
 
@@ -433,9 +435,9 @@
 <dialog id="menuDlg">
   <h3>更多</h3>
   <div style="display:flex;flex-direction:column;gap:8px">
+    <button id="btnMembers">👥 旅伴名單／我是誰</button>
     <button id="btnRoom" class="primary">☁ 建立共筆連結（旅伴一起即時編輯）</button>
     <button id="btnHistory" hidden>🕘 還原到之前的版本</button>
-    <button id="btnWho" hidden>👤 我是誰（記錄是誰改的）</button>
     <button id="btnLeaveRoom" hidden>離開共筆，改回只存在這台裝置</button>
     <button id="btnNew">＋ 新旅程（把目前這份存成分享連結再開新的）</button>
     <button id="btnExport">下載行程 JSON 備份</button>
@@ -571,7 +573,7 @@ async function initMap(){
   });
   $('#badge').textContent = '搜尋地點，或點地圖上的景點加入';
   render();
-  if (roomId) { $('#btnWho').hidden = false; $('#btnRoom').hidden = true; $('#btnLeaveRoom').hidden = false; $('#btnClear').hidden = true; $('#btnNew').hidden = true; $('#btnImport').hidden = true; $('#btnHistory').hidden = false; joinRoom(); } else loadNamedTrip();
+  if (roomId) { $('#btnRoom').hidden = true; $('#btnLeaveRoom').hidden = false; $('#btnClear').hidden = true; $('#btnNew').hidden = true; $('#btnImport').hidden = true; $('#btnHistory').hidden = false; joinRoom(); } else loadNamedTrip();
 }
 
 /* ---------- 搜尋 ---------- */
@@ -1011,6 +1013,7 @@ async function openHistory(){
 // ---- 我是誰：只是記在快照裡方便看是誰改的，沒有權限意義
 function askWho(force){
   if (!force && who()) return;
+  editMembers(); return;
   const sheet = $('#sheet'), body = $('#sheetBody'); $('#sheetTitle').textContent = '你是哪位？（記錄改動是誰做的）'; body.innerHTML = '';
   const names = state.members.length ? state.members : [];
   names.forEach(n => { const b = document.createElement('button'); b.className = 'sheet-item'; b.innerHTML = `<span class="ic">👤</span><span></span>`; b.lastChild.textContent = n; b.onclick = () => { try { localStorage.setItem('tp-who', n); } catch(e){} sheet.close(); toast(`記住了，你是 ${n}`); }; body.appendChild(b); });
@@ -1035,7 +1038,7 @@ async function createRoom(){
 }
 $('#btnRoom').addEventListener('click', () => { $('#menuDlg').close(); createRoom(); });
 $('#btnHistory').addEventListener('click', () => { $('#menuDlg').close(); openHistory(); });
-$('#btnWho').addEventListener('click', () => { $('#menuDlg').close(); askWho(true); });
+$('#btnMembers').addEventListener('click', () => { $('#menuDlg').close(); editMembers(); });
 $('#btnLeaveRoom').addEventListener('click', async () => { if (!await ask('離開後這台裝置會保留目前內容，但不再同步；共筆本身還在，用連結可以再回來。', '離開共筆', '離開')) return; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} location.href = location.pathname; });
 
 /* ============================================================ 卡片動作選單（手機是底部抽屜） */
@@ -1193,8 +1196,15 @@ function openGoSheet(di, s, mode){
   sheet.showModal();
 }
 function todayIndex(){ const t = todayStr(); const i = state.days.findIndex((_, di) => dayDate(di) === t); return i >= 0 ? i : activeDay >= 0 ? activeDay : 0; }
-function editMembers(){ $('#mNames').value = state.members.join('、'); $('#membersDlg').showModal(); $('#mNames').focus(); }
-$('#mSave').addEventListener('click', () => { state.members = $('#mNames').value.split(/[,，、\s\n]+/).map(x => x.trim()).filter(Boolean); save(); render(); $('#membersDlg').close(); if (!state.members.length) toast('沒有填到名字'); });
+function splitNames(v){ return v.split(/[,，、\s\n]+/).map(x => x.trim()).filter(Boolean); }
+function renderWhoPicker(){
+  const wrap = $('#mWhoWrap'); wrap.hidden = !roomId; if (!roomId) return;
+  const names = splitNames($('#mNames').value), me = who();
+  $('#mWho').innerHTML = names.map(n => `<label><input type="radio" name="mWho" value="${n}" ${n === me ? 'checked' : ''}> ${n}</label>`).join('') || '<span style="color:var(--muted);font-size:12px">先在上面填名字</span>';
+}
+function editMembers(){ $('#mNames').value = state.members.join('、'); renderWhoPicker(); $('#membersDlg').showModal(); if (!state.members.length) $('#mNames').focus(); }
+$('#mNames').addEventListener('input', renderWhoPicker);
+$('#mSave').addEventListener('click', () => { state.members = splitNames($('#mNames').value); const w = document.querySelector('input[name=mWho]:checked'); if (w) { try { localStorage.setItem('tp-who', w.value); } catch(e){} } save(); render(); $('#membersDlg').close(); if (!state.members.length) toast('沒有填到名字'); else if (roomId && !who()) toast('記得選一下你是誰'); });
 const CURRENCIES = { JPY:'日圓 日本', TWD:'台幣 台灣', KRW:'韓元 韓國', USD:'美元 美國', EUR:'歐元 歐洲', GBP:'英鎊 英國', THB:'泰銖 泰國', VND:'越南盾 越南', HKD:'港幣 香港', MOP:'澳門幣 澳門', SGD:'新幣 新加坡', MYR:'馬幣 馬來西亞', IDR:'印尼盾 印尼 峇里島', PHP:'披索 菲律賓', CNY:'人民幣 中國', AUD:'澳幣 澳洲', NZD:'紐幣 紐西蘭', CAD:'加幣 加拿大', CHF:'瑞士法郎 瑞士', SEK:'瑞典克朗', NOK:'挪威克朗', DKK:'丹麥克朗', CZK:'捷克克朗', HUF:'福林 匈牙利', PLN:'茲羅提 波蘭', TRY:'里拉 土耳其', AED:'迪拉姆 杜拜 阿聯', INR:'盧比 印度', LKR:'盧比 斯里蘭卡', NPR:'盧比 尼泊爾', KHR:'瑞爾 柬埔寨', LAK:'基普 寮國', MMK:'緬元 緬甸', MNT:'圖格里克 蒙古', EGP:'埃及鎊', ZAR:'蘭特 南非', MXN:'披索 墨西哥', BRL:'雷亞爾 巴西', ARS:'披索 阿根廷', PEN:'索爾 秘魯', ISK:'冰島克朗', ILS:'謝克爾 以色列', MVR:'拉菲亞 馬爾地夫', FJP:'斐濟元' };
 $('#curList').innerHTML = Object.entries(CURRENCIES).map(([c, n]) => `<option value="${c}">${n}</option>`).join('');
 const curCode = v => (v.trim().toUpperCase().match(/^[A-Z]{3}/) || [''])[0] || Object.keys(CURRENCIES).find(c => CURRENCIES[c].includes(v.trim())) || '';
