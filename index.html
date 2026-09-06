@@ -114,6 +114,8 @@
   .leg .ins:hover{color:var(--ok);border-color:#cfe8d5;background:#eef8f0}
   .leg .ins.on{color:#fff;background:var(--ok);border-color:var(--ok)}
   .empty{color:var(--muted);font-size:12.5px;text-align:center;padding:12px}
+  .add-first{display:block;width:100%;padding:14px;margin:4px 0;font-size:14px;border:1.5px dashed #c9c7c1;border-radius:10px;background:#faf9f7;color:var(--accent);font-weight:600}
+  .add-first:hover{background:#f3f7fd;border-color:var(--accent)}
   .day-foot{display:flex;gap:6px;padding:6px 10px 10px;justify-content:flex-end}
   .day-foot button{font-size:12px}
 
@@ -794,15 +796,14 @@ function render(){
 
     {
       const list = el.querySelector('.stops');
-      if (!st.seq.length) list.innerHTML = `<div class="empty">這天還沒有行程，${di === activeDay ? '用上面的搜尋加入地點' : '點這天的標題再搜尋'}</div>`;
-      else if (!day.stops.length && st.seq.length === 1) { /* 只有飯店 */ }
       st.rows.forEach(r => {
         if (r.type === 'stop') list.appendChild(stopEl(day, di, r));
         else list.appendChild(legEl(day, di, r));
       });
-      if (!day.stops.length && st.seq.length) {  // 只有飯店卡：給一個插入點
-        const e = document.createElement('div'); e.className = 'empty'; e.innerHTML = `這天還沒有行程 <button class="ins" style="padding:2px 8px;font-size:12px">＋ 插入</button>`;
-        e.querySelector('button').onclick = () => startInsert(di, 0); list.appendChild(e);
+      if (!day.stops.length) {  // 空的一天：一顆大的「＋ 加入地點」，按了選中這天並跳到搜尋框
+        const e = document.createElement('button'); e.className = 'add-first'; e.innerHTML = '＋ 加入這天的第一個地點';
+        e.onclick = () => { activeDay = di; render(); const q = $('#q'); q.focus(); q.scrollIntoView({ block:'nearest' }); toast(`打字搜尋，會加到 ${dayLabel(di)}`); };
+        list.appendChild(e);
       }
       new Sortable(list, { group:'stops', animation:160, draggable:'.stop:not(.fixed)', delay:120, delayOnTouchOnly:true, filter:'input,textarea,button,select,a,[contenteditable]', preventOnFilter:false, scroll:$('#days'), scrollSensitivity:90, scrollSpeed:18, bubbleScroll:true, forceAutoScrollFallback:true, onEnd:onDragEnd });
     }
