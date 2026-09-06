@@ -432,6 +432,8 @@
   <h3>更多</h3>
   <div style="display:flex;flex-direction:column;gap:8px">
     <button id="btnRoom" class="primary">☁ 建立共筆連結（旅伴一起即時編輯）</button>
+    <button id="btnHistory" hidden>🕘 還原到之前的版本</button>
+    <button id="btnWho" hidden>👤 我是誰（記錄是誰改的）</button>
     <button id="btnLeaveRoom" hidden>離開共筆，改回只存在這台裝置</button>
     <button id="btnNew">＋ 新旅程（把目前這份存成分享連結再開新的）</button>
     <button id="btnExport">下載行程 JSON 備份</button>
@@ -567,7 +569,7 @@ async function initMap(){
   });
   $('#badge').textContent = '搜尋地點，或點地圖上的景點加入';
   render();
-  if (roomId) { $('#btnRoom').hidden = true; $('#btnLeaveRoom').hidden = false; joinRoom(); } else loadNamedTrip();
+  if (roomId) { $('#btnWho').hidden = false; $('#btnRoom').hidden = true; $('#btnLeaveRoom').hidden = false; $('#btnClear').hidden = true; $('#btnNew').hidden = true; $('#btnImport').hidden = true; $('#btnHistory').hidden = false; joinRoom(); } else loadNamedTrip();
 }
 
 /* ---------- 搜尋 ---------- */
@@ -937,21 +939,83 @@ function applyRemote(snap){
 }
 function schedulePush(){
   if (!roomRef || applying) return;
+  if (!who() && !$('#sheet').open) setTimeout(() => askWho(false), 300);
   try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){}
   dirty = true; clearTimeout(pushTimer); pushTimer = setTimeout(pushPlan, 700);
 }
+const countStops = plan => Object.keys(plan).filter(k => /^d\d+$/.test(k)).reduce((a, k) => a + ((plan[k].stops || []).length), 0);
+function restorePlan(plan){  // 把一份 plan（meta + d0…）套回 state
+  const meta = plan.meta || {}; META_KEYS.forEach(k => { if (k in meta) state[k] = meta[k]; });
+  const n = plan.n ?? 0, days = []; for (let i = 0; i < n; i++) days.push(plan['d' + i] || { start:'09:00', stops:[] });
+  state.days = days; state = normalize(state); if (activeDay >= state.days.length) activeDay = state.days.length - 1;
+}
+let guarding = false;
 async function pushPlan(){
+  if (guarding) return;
   const cur = cloudPlan(), diff = {};
   for (const k of Object.keys(cur)) if (JSON.stringify(cur[k]) !== JSON.stringify(lastSent[k])) diff[k] = cur[k];
   for (const k of Object.keys(lastSent)) if (/^d\d+$/.test(k) && !(k in cur)) diff[k] = firebase.firestore.FieldValue.delete();
   if (!Object.keys(diff).length) { dirty = false; return; }
+  // 守門：一次少掉一半以上的地點（≥4 站），多問一次；不要就整份退回
+  const before = countStops(lastSent), after = countStops(cur);
+  if (before >= 4 && after < before / 2) {
+    guarding = true;
+    const ok = await ask(`這個改動會讓行程從 ${before} 站變成 ${after} 站，其他旅伴也會一起變。\n\n確定要送出嗎？`, '大幅刪除', '確定送出', true);
+    guarding = false;
+    if (!ok) { restorePlan(lastSent); skipUndo = true; save(); skipUndo = false; dirty = false; render(); toast('已退回，沒有送出'); return; }
+  }
   setSync('busy');
   try {
     // 用 update 而不是 merge：整天欄位整個換掉（避免舊的 hotel 殘留），meta 也是
     await roomRef.update({ ...diff, updatedAt:firebase.firestore.FieldValue.serverTimestamp() }); lastSent = cur; dirty = false; setSync('on');
+    writeHistory(cur);
     // 送出期間若有別人的更新被擋下，補抓一次最新的
     roomRef.get().then(sn => { if (!dirty && sn.exists) applyRemote(sn); });
   } catch(e) { console.error(e); setSync('off'); toast('同步失敗：' + (e.code || e.message)); dirty = false; }
+}
+// ---- 歷史快照：每次送出留一份，保留最近 60 份
+const who = () => { try { return localStorage.getItem('tp-who') || ''; } catch(e) { return ''; } };
+let histTimer = null;
+function writeHistory(plan){
+  clearTimeout(histTimer);
+  histTimer = setTimeout(async () => {  // 連續改動合併成一份，省寫入
+    try {
+      const ts = Date.now();
+      await roomRef.collection('history').doc(String(ts)).set({ ts, by:who(), stops:countStops(plan), days:plan.n, plan:JSON.stringify(plan) });
+      const all = await roomRef.collection('history').orderBy('ts', 'desc').get();
+      const extra = all.docs.slice(60); if (extra.length) { const b = db.batch(); extra.forEach(d => b.delete(d.ref)); await b.commit(); }
+    } catch(e) { console.warn('history', e.code || e); }
+  }, 4000);
+}
+async function openHistory(){
+  toast('讀取中…');
+  let docs = [];
+  try { docs = (await roomRef.collection('history').orderBy('ts', 'desc').limit(60).get()).docs.map(d => d.data()); } catch(e) { return toast('讀不到歷史：' + (e.code || e.message)); }
+  if (!docs.length) return toast('還沒有歷史版本（之後每次改動都會自動留一份）');
+  const sheet = $('#sheet'), body = $('#sheetBody'); $('#sheetTitle').textContent = '還原到之前的版本'; body.innerHTML = '';
+  const fmt = ts => { const d = new Date(ts), t = new Date(); const same = d.toDateString() === t.toDateString(); return `${same ? '今天' : (d.getMonth() + 1) + '/' + d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  docs.forEach((h, i) => {
+    const b = document.createElement('button'); b.className = 'sheet-item';
+    b.innerHTML = `<span class="ic">🕘</span><span></span><small style="margin-left:auto;color:var(--muted);white-space:nowrap">${h.days} 天 · ${h.stops} 站</small>`;
+    b.children[1].textContent = `${fmt(h.ts)}${h.by ? ' · ' + h.by : ''}${i === 0 ? '（目前）' : ''}`;
+    b.onclick = async () => {
+      sheet.close();
+      if (!await ask(`把整份行程還原到「${fmt(h.ts)}${h.by ? '，' + h.by + ' 改的' : ''}」那個版本？\n\n所有旅伴都會一起變成那個版本。帳目不受影響。`, '還原版本', '還原')) return;
+      restorePlan(JSON.parse(h.plan)); save(); render(); toast('已還原，正在同步給大家');
+    };
+    body.appendChild(b);
+  });
+  sheet.showModal();
+}
+// ---- 我是誰：只是記在快照裡方便看是誰改的，沒有權限意義
+function askWho(force){
+  if (!force && who()) return;
+  const sheet = $('#sheet'), body = $('#sheetBody'); $('#sheetTitle').textContent = '你是哪位？（記錄改動是誰做的）'; body.innerHTML = '';
+  const names = state.members.length ? state.members : [];
+  names.forEach(n => { const b = document.createElement('button'); b.className = 'sheet-item'; b.innerHTML = `<span class="ic">👤</span><span></span>`; b.lastChild.textContent = n; b.onclick = () => { try { localStorage.setItem('tp-who', n); } catch(e){} sheet.close(); toast(`記住了，你是 ${n}`); }; body.appendChild(b); });
+  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;padding:8px 12px'; row.innerHTML = '<input type="text" id="whoIn" placeholder="或打名字" style="flex:1;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px"><button class="primary">好</button>';
+  row.querySelector('button').onclick = () => { const v = row.querySelector('input').value.trim(); if (v) { try { localStorage.setItem('tp-who', v); } catch(e){} sheet.close(); toast(`記住了，你是 ${v}`); } };
+  body.appendChild(row); sheet.showModal();
 }
 function pushExpense(e){ if (roomRef) roomRef.collection('expenses').doc(e.id).set(toCloud(e)); }
 function deleteExpense(id){ if (roomRef) roomRef.collection('expenses').doc(id).delete(); }
@@ -969,6 +1033,8 @@ async function createRoom(){
   } catch(e) { console.error(e); toast('建立失敗：' + (e.code || e.message)); }
 }
 $('#btnRoom').addEventListener('click', () => { $('#menuDlg').close(); createRoom(); });
+$('#btnHistory').addEventListener('click', () => { $('#menuDlg').close(); openHistory(); });
+$('#btnWho').addEventListener('click', () => { $('#menuDlg').close(); askWho(true); });
 $('#btnLeaveRoom').addEventListener('click', async () => { if (!await ask('離開後這台裝置會保留目前內容，但不再同步；共筆本身還在，用連結可以再回來。', '離開共筆', '離開')) return; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} location.href = location.pathname; });
 
 /* ============================================================ 卡片動作選單（手機是底部抽屜） */
