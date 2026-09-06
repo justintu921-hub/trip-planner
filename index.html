@@ -238,6 +238,27 @@
     #toast{bottom:calc(72px + env(safe-area-inset-bottom))}
   }
 
+  /* 模式頁籤 */
+  #tabs{display:flex;border-bottom:1px solid var(--line);background:var(--panel);flex:none}
+  #tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:0;background:transparent;padding:11px 8px;font-size:15px;font-weight:600;color:var(--muted);position:relative}
+  #tabs button svg{color:currentColor}
+  #tabs button.on{color:var(--accent)}
+  #tabs button.on::after{content:"";position:absolute;left:18%;right:18%;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--accent)}
+  #tabs button:hover{background:#faf9f7}
+  #goDot{position:absolute;top:8px;right:calc(50% - 34px);width:8px;height:8px;border-radius:50%;background:var(--danger);box-shadow:0 0 0 2px #fff}
+  body.list #tabs{max-width:860px;margin:0 auto;width:100%}
+  @media (max-width:820px){
+    #tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;border-top:1px solid var(--line);border-bottom:0;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -4px 14px rgba(0,0,0,.06)}
+    #tabs button{flex-direction:column;gap:3px;padding:8px 4px 6px;font-size:11.5px;font-weight:600}
+    #tabs button svg{width:26px;height:26px}
+    #tabs button.on::after{display:none}
+    #goDot{right:calc(50% - 22px);top:6px}
+    #days{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+    #btnUndo{bottom:calc(74px + env(safe-area-inset-bottom))}
+    #toast{bottom:calc(128px + env(safe-area-inset-bottom))}
+    body.list #tabs{max-width:none}
+  }
+
   main{position:relative}
   #map{position:absolute;inset:0}
   .map-ui{position:absolute;top:12px;left:12px;right:60px;display:flex;gap:8px;align-items:center;z-index:5;flex-wrap:wrap}
@@ -297,7 +318,6 @@
   <header>
     <div class="title-row">
       <input id="tripTitle" placeholder="旅程名稱" spellcheck="false">
-      <span class="seg"><button id="vMap" class="on">規劃</button><button id="vGo">出發</button></span>
       <button id="btnUndo" title="復原上一步（Ctrl+Z）" hidden>↶ 復原</button>
       <span id="syncDot" class="sync" hidden title="共筆同步狀態"></span>
       <button class="ghost" id="btnShareTop" title="分享" hidden>📤</button>
@@ -321,6 +341,10 @@
     </div>
     <div class="hint" id="hint"></div>
   </header>
+  <nav id="tabs">
+    <button id="vMap" class="on"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 4.5 9 2.5 3 4.5v15l6-2 6 2 6-2v-15l-6 2Zm-6-.3 4.6 1.5v13.1L9 17.3V4.2Zm-4.5 1.6L7.5 4.6v13.1l-3 1V5.8Zm15 13.4-3 1V7.1l3-1v13.1Z" fill="currentColor"/></svg><span>規劃</span></button>
+    <button id="vGo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6.5 3.5a1 1 0 0 1 1 1V5h9.2a1 1 0 0 1 .8 1.6L15.3 10l2.2 3.4a1 1 0 0 1-.8 1.6H7.5v5a1 1 0 1 1-2 0v-15a1 1 0 0 1 1-1Zm1 3.5v6h7.4l-1.6-2.4a1 1 0 0 1 0-1.2L14.9 7H7.5Z" fill="currentColor"/></svg><span>出發</span><i id="goDot" hidden></i></button>
+  </nav>
   <div id="poolMount"></div>
   <div id="days"></div>
 </aside>
@@ -718,6 +742,7 @@ function render(){
   document.body.classList.toggle('list', view !== 'map');
   document.body.classList.toggle('go', view === 'go');
   ['map','go'].forEach(v => $('#v' + v[0].toUpperCase() + v.slice(1)).classList.toggle('on', view === v));
+  updateGoDot();
   $('#searchBox').className = 'search' + (replacing ? ' replacing' : inserting ? ' inserting' : '');
   const hint = $('#hint'); hint.className = 'hint' + (replacing ? ' replace' : inserting ? ' insert' : '');
   if (replacing) { const s = listOf(replacing.di).find(x => x.id === replacing.id); hint.innerHTML = `搜尋新地點來取代「${s ? s.name : ''}」 <button id="cancelPick">取消</button>`; }
@@ -1404,6 +1429,7 @@ $('#mode').addEventListener('change', e => { state.mode = e.target.value; save()
 $('#btnAddDay').addEventListener('click', addDay);
 $('#vMap').addEventListener('click', () => { view = 'map'; render(); setTimeout(() => map && google.maps.event.trigger(map, 'resize'), 50); });
 $('#vGo').addEventListener('click', () => { view = 'go'; $('#days')._scrolled = false; render(); });
+function updateGoDot(){ const t = todayStr(); const on = state.startDate && state.days.some((_, i) => dayDate(i) === t); $('#goDot').hidden = !on || view === 'go'; }
 $('#showAll').addEventListener('change', e => { showAll = e.target.checked; drawMarkers(); });
 $('#btnShareTop').addEventListener('click', () => $('#btnShare').click());
 $('#btnUndo').addEventListener('click', undo);
