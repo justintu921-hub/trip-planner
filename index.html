@@ -238,24 +238,23 @@
     #toast{bottom:calc(72px + env(safe-area-inset-bottom))}
   }
 
-  /* 模式頁籤 */
-  #tabs{display:flex;border-bottom:1px solid var(--line);background:var(--panel);flex:none}
-  #tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:0;background:transparent;padding:11px 8px;font-size:15px;font-weight:600;color:var(--muted);position:relative}
-  #tabs button svg{color:currentColor}
-  #tabs button.on{color:var(--accent)}
-  #tabs button.on::after{content:"";position:absolute;left:18%;right:18%;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--accent)}
-  #tabs button:hover{background:#faf9f7}
-  #goDot{position:absolute;top:8px;right:calc(50% - 34px);width:8px;height:8px;border-radius:50%;background:var(--danger);box-shadow:0 0 0 2px #fff}
+  /* 模式頁籤：大顆分段式 */
+  #tabs{display:flex;gap:6px;padding:10px 12px 0;background:var(--panel);flex:none}
+  #tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:10px;border:1.5px solid var(--line);border-radius:14px;background:#f3f2ee;padding:13px 10px;font-size:16px;font-weight:700;color:var(--muted);position:relative;transition:background .15s,color .15s,box-shadow .15s}
+  #tabs button svg{width:24px;height:24px;color:currentColor}
+  #tabs button:hover{background:#ecebe6}
+  #tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 6px 16px rgba(26,115,232,.28)}
+  #tabs button.on:hover{background:#1765cc}
+  #goDot{position:absolute;top:10px;right:14px;width:9px;height:9px;border-radius:50%;background:var(--danger);box-shadow:0 0 0 2px #fff}
   body.list #tabs{max-width:860px;margin:0 auto;width:100%}
   @media (max-width:820px){
-    #tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;border-top:1px solid var(--line);border-bottom:0;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -4px 14px rgba(0,0,0,.06)}
-    #tabs button{flex-direction:column;gap:3px;padding:8px 4px 6px;font-size:11.5px;font-weight:600}
-    #tabs button svg{width:26px;height:26px}
-    #tabs button.on::after{display:none}
-    #goDot{right:calc(50% - 22px);top:6px}
-    #days{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
-    #btnUndo{bottom:calc(74px + env(safe-area-inset-bottom))}
-    #toast{bottom:calc(128px + env(safe-area-inset-bottom))}
+    #tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line);box-shadow:0 -6px 18px rgba(0,0,0,.07)}
+    #tabs button{flex-direction:row;gap:8px;padding:12px 8px;font-size:15px;border-radius:14px}
+    #tabs button svg{width:24px;height:24px}
+    #goDot{top:8px;right:10px}
+    #days{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+    #btnUndo{bottom:calc(82px + env(safe-area-inset-bottom))}
+    #toast{bottom:calc(136px + env(safe-area-inset-bottom))}
     body.list #tabs{max-width:none}
   }
 
@@ -315,6 +314,10 @@
 
 <aside>
   <div id="divider" title="拖拉調整大小，連點兩下還原"></div>
+  <nav id="tabs">
+    <button id="vMap" class="on"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 4.5 9 2.5 3 4.5v15l6-2 6 2 6-2v-15l-6 2Zm-6-.3 4.6 1.5v13.1L9 17.3V4.2Zm-4.5 1.6L7.5 4.6v13.1l-3 1V5.8Zm15 13.4-3 1V7.1l3-1v13.1Z" fill="currentColor"/></svg><span>規劃</span></button>
+    <button id="vGo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6.5 3.5a1 1 0 0 1 1 1V5h9.2a1 1 0 0 1 .8 1.6L15.3 10l2.2 3.4a1 1 0 0 1-.8 1.6H7.5v5a1 1 0 1 1-2 0v-15a1 1 0 0 1 1-1Zm1 3.5v6h7.4l-1.6-2.4a1 1 0 0 1 0-1.2L14.9 7H7.5Z" fill="currentColor"/></svg><span>出發</span><i id="goDot" hidden></i></button>
+  </nav>
   <header>
     <div class="title-row">
       <input id="tripTitle" placeholder="旅程名稱" spellcheck="false">
@@ -341,10 +344,6 @@
     </div>
     <div class="hint" id="hint"></div>
   </header>
-  <nav id="tabs">
-    <button id="vMap" class="on"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 4.5 9 2.5 3 4.5v15l6-2 6 2 6-2v-15l-6 2Zm-6-.3 4.6 1.5v13.1L9 17.3V4.2Zm-4.5 1.6L7.5 4.6v13.1l-3 1V5.8Zm15 13.4-3 1V7.1l3-1v13.1Z" fill="currentColor"/></svg><span>規劃</span></button>
-    <button id="vGo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6.5 3.5a1 1 0 0 1 1 1V5h9.2a1 1 0 0 1 .8 1.6L15.3 10l2.2 3.4a1 1 0 0 1-.8 1.6H7.5v5a1 1 0 1 1-2 0v-15a1 1 0 0 1 1-1Zm1 3.5v6h7.4l-1.6-2.4a1 1 0 0 1 0-1.2L14.9 7H7.5Z" fill="currentColor"/></svg><span>出發</span><i id="goDot" hidden></i></button>
-  </nav>
   <div id="poolMount"></div>
   <div id="days"></div>
 </aside>
