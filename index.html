@@ -259,6 +259,15 @@
     body.list #tabs{max-width:none}
   }
 
+  /* 附近推薦條 */
+  .nearby{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;padding:6px 8px;background:#eef8f0;border:1px dashed #cfe8d5;border-radius:8px}
+  .nb-label{font-size:11px;color:var(--ok);font-weight:600;margin-right:2px}
+  .nb-chip{display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;padding:4px 9px;border:1px solid #cfe8d5;border-radius:8px;background:#fff;font-size:12px;line-height:1.2;text-align:left;max-width:100%}
+  .nb-chip b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+  .nb-chip small{color:var(--muted);font-size:10.5px}
+  .nb-chip:hover{border-color:var(--ok);background:#f6fcf7}
+  .nb-close{margin-left:auto;border:0;background:transparent;color:var(--muted);padding:2px 6px;font-size:12px}
+
   main{position:relative}
   #map{position:absolute;inset:0}
   .map-ui{position:absolute;top:12px;left:12px;right:60px;display:flex;gap:8px;align-items:center;z-index:5;flex-wrap:wrap}
@@ -489,6 +498,7 @@ const META_KEYS = ['title','mode','startDate','members','currency','rate','rateD
 const roomId = (new URLSearchParams(location.search).get('room') || '').replace(/[^A-Za-z0-9]/g, '') || null;
 // activeDay === -1 代表「口袋名單」
 let activeDay = 0, view = 'map', showAll = false, replacing = null, inserting = null, hotelFor = null, poolOpen = true;
+let nearbyFor = null;  // {id, items, loading} 附近推薦（只存在畫面，不進資料）
 function normalize(s){ s.pool ||= []; s.members ||= []; s.currency ||= 'JPY'; s.expenses ||= []; s.done ||= {}; if (s.rate === undefined) s.rate = null; return s; }
 const listOf = di => di < 0 ? state.pool : state.days[di].stops;
 const targetLabel = di => di < 0 ? '口袋名單' : dayLabel(di);
@@ -633,12 +643,12 @@ function pickPlace(p){
   }
   if (inserting) {
     const { di, index } = inserting; inserting = null; activeDay = di;
-    state.days[di].stops.splice(index, 0, newStop(p)); save(); render(); toast(`已插入 ${dayLabel(di)}：${p.name}`); return;
+    const st = newStop(p); state.days[di].stops.splice(index, 0, st); save(); render(); toast(`已插入 ${dayLabel(di)}：${p.name}`); suggestNearby(st, di); return;
   }
   addStop(p);
 }
 const newStop = p => ({ id:uid(), name:p.name, addr:p.addr || '', lat:p.lat, lng:p.lng, pid:p.pid || '', stay:60, note:p.note || '' });
-function addStop(p, di = activeDay){ listOf(di).push(newStop(p)); if (di < 0) poolOpen = true; save(); render(); toast(`已加入 ${targetLabel(di)}：${p.name}`); }
+function addStop(p, di = activeDay){ const st = newStop(p); listOf(di).push(st); if (di < 0) poolOpen = true; save(); render(); toast(`已加入 ${targetLabel(di)}：${p.name}`); if (di >= 0) suggestNearby(st, di); }
 function removeStop(di, id){ const l = listOf(di), i = l.findIndex(s => s.id === id); if (i < 0) return; const [x] = l.splice(i, 1); save(); render(); toastUndo(`已刪除「${x.name}」`); }
 function duplicateStop(di, id){ const list = listOf(di), i = list.findIndex(s => s.id === id); list.splice(i + 1, 0, { ...list[i], id:uid() }); save(); render(); toast('已複製一份在下面，拖到想要的位置'); }
 function toPool(di, id){ const l = listOf(di), i = l.findIndex(s => s.id === id); if (i < 0) return; const [s] = l.splice(i, 1); state.pool.push(s); poolOpen = true; save(); render(); toast(`「${s.name}」放回口袋`); }
@@ -890,6 +900,7 @@ function stopEl(day, di, r){
         ${fixed ? `<span>${s.fixed === 'from' ? '從飯店出發' : '回飯店'}</span>` : `<span>停留 <input type="text" inputmode="numeric" pattern="[0-9]*" value="${s.stay}"> 分</span>`}
       </div>
       ${fixed ? '' : '<div class="stop-note" title="點一下看全文／編輯"></div>'}
+      ${nearbyFor && nearbyFor.id === s.id ? '<div class="nearby"></div>' : ''}
     </div>
     <div class="stop-actions">
       ${fixed ? '' : '<button class="more" title="更多">⋯</button>'}
@@ -897,6 +908,7 @@ function stopEl(day, di, r){
     </div>`;
   const nameEl = el.querySelector('.stop-name'); nameEl.textContent = s.name;
   el.querySelector('.stop-addr').textContent = s.addr;
+  const nb = el.querySelector('.nearby'); if (nb) renderNearby(nb, di, s);
   if (!fixed) {
     nameEl.addEventListener('blur', () => { const v = nameEl.textContent.trim(); if (v && v !== s.name) { s.name = v; save(); render(); } else nameEl.textContent = s.name; });
     nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); } });
@@ -1066,6 +1078,52 @@ $('#btnHistory').addEventListener('click', () => { $('#menuDlg').close(); openHi
 $('#btnMembers').addEventListener('click', () => { $('#menuDlg').close(); editMembers(); });
 $('#btnLeaveRoom').addEventListener('click', async () => { if (!await ask('離開後這台裝置會保留目前內容，但不再同步；共筆本身還在，用連結可以再回來。', '離開共筆', '離開')) return; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} location.href = location.pathname; });
 
+/* ============================================================ 附近推薦（Places Nearby Search，與文字搜尋同計費等級） */
+const NEARBY_TYPES = ['tourist_attraction','museum','art_gallery','park','beach','aquarium','zoo','amusement_park','shopping_mall','market','restaurant','cafe','bakery','historical_landmark','hindu_temple','buddhist_temple','shinto_shrine','church','garden','observation_deck','national_park','cultural_landmark','monument','plaza','water_park','marina','ice_cream_shop','dessert_shop','ramen_restaurant','sushi_restaurant','japanese_restaurant','seafood_restaurant','coffee_shop','tea_house'];
+async function suggestNearby(s, di, manual){
+  if (!placesLib || !placesLib.Place.searchNearby) return;
+  nearbyFor = { id:s.id, items:[], loading:true }; render();
+  try {
+    const known = new Set([...state.pool, ...state.days.flatMap(d => d.stops)].map(x => x.pid).filter(Boolean));
+    const { places } = await placesLib.Place.searchNearby({
+      fields:['displayName','formattedAddress','location','id','rating','userRatingCount','primaryTypeDisplayName'],
+      locationRestriction:{ center:{ lat:s.lat, lng:s.lng }, radius:2500 },
+      includedPrimaryTypes:NEARBY_TYPES.slice(0, 50), maxResultCount:15,
+      rankPreference:placesLib.SearchNearbyRankPreference.POPULARITY, language:'zh-TW',
+    });
+    const items = places
+      .filter(p => p.id !== s.pid && !known.has(p.id) && (p.rating || 0) >= 4 && (p.userRatingCount || 0) >= 80)
+      .sort((a, b) => (b.rating * Math.log10(b.userRatingCount)) - (a.rating * Math.log10(a.userRatingCount)))
+      .slice(0, 3)
+      .map(p => ({ name:p.displayName, addr:p.formattedAddress || '', lat:p.location.lat(), lng:p.location.lng(), pid:p.id, rating:p.rating, n:p.userRatingCount, type:p.primaryTypeDisplayName || '' }));
+    nearbyFor = { id:s.id, items, loading:false };
+    if (!items.length && manual) toast('附近 2.5 公里內沒有評價夠好的推薦');
+    if (!items.length && !manual) nearbyFor = null;
+  } catch(e) { console.warn('nearby', e); nearbyFor = null; if (manual) toast('查附近失敗：' + (e.message || e)); }
+  render();
+}
+function renderNearby(box, di, s){
+  const nf = nearbyFor; box.innerHTML = '';
+  if (nf.loading) { box.innerHTML = '<span class="nb-label">找附近推薦…</span>'; return; }
+  const lab = document.createElement('span'); lab.className = 'nb-label'; lab.textContent = '附近也可以去'; box.appendChild(lab);
+  nf.items.forEach(p => {
+    const c = document.createElement('button'); c.className = 'nb-chip'; c.innerHTML = '<b></b><small></small>';
+    c.querySelector('b').textContent = p.name; c.querySelector('small').textContent = `${p.rating}★ ${p.type ? '· ' + p.type : ''}`;
+    c.onclick = () => nearbyPick(p, di, s);
+    box.appendChild(c);
+  });
+  const x = document.createElement('button'); x.className = 'nb-close'; x.textContent = '✕'; x.title = '收起'; x.onclick = () => { nearbyFor = null; render(); }; box.appendChild(x);
+}
+function nearbyPick(p, di, s){
+  const sheet = $('#sheet'), body = $('#sheetBody'); $('#sheetTitle').textContent = `${p.name}（${p.rating}★，${p.n.toLocaleString()} 則評價）`; body.innerHTML = '';
+  const add = (ic, label, fn) => { const b = document.createElement('button'); b.className = 'sheet-item'; b.innerHTML = `<span class="ic">${ic}</span><span></span>`; b.lastChild.textContent = label; b.onclick = () => { sheet.close(); fn(); }; body.appendChild(b); };
+  add('➕', `加到 ${dayLabel(di)}，排在「${s.name}」後面`, () => { const i = state.days[di].stops.findIndex(x => x.id === s.id); state.days[di].stops.splice(i + 1, 0, newStop(p)); nearbyFor.items = nearbyFor.items.filter(x => x.pid !== p.pid); save(); render(); toast(`已加入：${p.name}`); });
+  add('👜', '先丟進口袋名單', () => { state.pool.push(newStop(p)); poolOpen = true; nearbyFor.items = nearbyFor.items.filter(x => x.pid !== p.pid); save(); render(); toast(`已放進口袋：${p.name}`); });
+  add('📍', '在 Google Maps 看看', () => window.open(placeUrl(p), '_blank'));
+  if (p.addr) { const n = document.createElement('div'); n.className = 'sheet-note'; n.textContent = p.addr; body.appendChild(n); }
+  sheet.showModal();
+}
+
 /* ============================================================ 卡片動作選單（手機是底部抽屜） */
 let lastReal = 0;
 function lastRealDay(){ return activeDay >= 0 ? activeDay : Math.min(lastReal, state.days.length - 1); }
@@ -1087,6 +1145,7 @@ function openSheet(di, s){
   const items = [];
   if (inPool) items.push(['➕', '加到某一天…', () => openDayPicker(s)]);
   items.push(['✏️', '改名', () => renameDlg(s)]);
+  if (!inPool) items.push(['🔎', '看附近推薦', () => suggestNearby(s, di, true)]);
   items.push(['📝', s.note ? '看／改備註' : '加備註', () => openNote(s)]);
   items.push(['⇄', '換成別的地點（保留停留、備註）', () => startReplace(di, s.id)]);
   if (!inPool) {
