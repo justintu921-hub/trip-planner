@@ -919,7 +919,7 @@ function stopEl(day, di, r){
    rooms/{id}/expenses/{expId}：每筆帳一份文件，只加不覆蓋
    房間 id 是隨機 20 碼，規則不允許列出房間，沒連結的人猜不到 */
 const FB = { apiKey:"AIzaSyA-rR0sV9iR_vS6_-a8jXEm2Zlj1bt3k9A", authDomain:"trip-planner-a006c.firebaseapp.com", projectId:"trip-planner-a006c", storageBucket:"trip-planner-a006c.firebasestorage.app", messagingSenderId:"1069726229577", appId:"1:1069726229577:web:b88d3e992c3b5cf1e50b98" };
-let db = null, roomRef = null, pushTimer = null, lastSent = {}, applying = false, dirty = false;
+let db = null, roomRef = null, pushTimer = null, lastSent = {}, applying = false, dirty = false, whoNudged = false;
 const planKeys = () => { const meta = {}; META_KEYS.forEach(k => meta[k] = state[k] ?? null); const o = { meta, n:state.days.length }; state.days.forEach((d, i) => o['d' + i] = d); return o; };
 const setSync = cls => { const el = $('#syncDot'); el.hidden = !roomId; el.className = 'sync ' + cls; el.title = { on:'共筆已同步', busy:'同步中…', off:'離線，恢復連線會自動補上' }[cls] || ''; };
 // Firestore 不吃 undefined：存的時候 undefined → 缺欄位（用 JSON 轉一次就會掉）；hotel 的 undefined 要特別標記
@@ -966,7 +966,7 @@ function applyRemote(snap){
 }
 function schedulePush(){
   if (!roomRef || applying) return;
-  if (!who() && !$('#sheet').open) setTimeout(() => askWho(false), 300);
+  if (!who() && !whoNudged) { whoNudged = true; setTimeout(() => { const t = $('#toast'); t.innerHTML = ''; t.append('共筆會記錄是誰改的，先選一下你是誰 '); const b = document.createElement('button'); b.textContent = '設定'; b.style.cssText = 'margin-left:8px;padding:2px 10px;font-size:12px;background:#fff;border-radius:6px'; b.onclick = () => { t.classList.remove('show'); t.style.pointerEvents = ''; editMembers(); }; t.appendChild(b); t.style.pointerEvents = 'auto'; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.classList.remove('show'); t.style.pointerEvents = ''; }, 8000); }, 600); }
   try { localStorage.setItem(KEY + ':room:' + roomId, JSON.stringify(state)); } catch(e){}
   dirty = true; clearTimeout(pushTimer); pushTimer = setTimeout(pushPlan, 700);
 }
