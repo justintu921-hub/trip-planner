@@ -268,6 +268,19 @@
   .nb-chip:hover{border-color:var(--ok);background:#f6fcf7}
   .nb-close{margin-left:auto;border:0;background:transparent;color:var(--muted);padding:2px 6px;font-size:12px}
 
+  /* 大眾運輸搭法 */
+  .leg-wrap{display:block}
+  .transit{margin:0 6px 6px 22px;padding:6px 10px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:5px}
+  .tr-step{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--ink);line-height:1.35}
+  .tr-step.walk{color:var(--muted)}
+  .tr-ic{width:18px;text-align:center;flex:none}
+  .tr-body{min-width:0}
+  .tr-line{display:inline-block;font-weight:700;padding:0 6px;border-radius:5px;background:#e8f0fe;color:var(--accent);font-size:12px}
+  .tr-name{color:var(--muted)}
+  .tr-link{color:var(--accent);text-decoration:none;margin-left:4px;white-space:nowrap}
+  .tr-detail{color:var(--muted);font-size:11.5px;margin-top:1px}
+  .lg .transit{margin:4px 0 0 0;border-left:0;padding:4px 0 0}
+
   main{position:relative}
   #map{position:absolute;inset:0}
   .map-ui{position:absolute;top:12px;left:12px;right:60px;display:flex;gap:8px;align-items:center;z-index:5;flex-wrap:wrap}
@@ -659,7 +672,24 @@ function addDay(){ state.days.push({ start:'09:00', stops:[] }); activeDay = sta
 function removeDay(di){ if (state.days.length === 1) state.days[0].stops = []; else state.days.splice(di, 1); activeDay = Math.min(activeDay, state.days.length - 1); save(); render(); }
 
 /* ---------- 車程 ---------- */
-const legKey = (a, b, mode) => `${mode}|${a.lat.toFixed(5)},${a.lng.toFixed(5)}|${b.lat.toFixed(5)},${b.lng.toFixed(5)}`;
+const legKey = (a, b, mode, dep) => `${mode}|${a.lat.toFixed(5)},${a.lng.toFixed(5)}|${b.lat.toFixed(5)},${b.lng.toFixed(5)}${mode === 'TRANSIT' && dep ? '|' + dep.slice(0, 4) + (Math.floor(+dep.slice(3, 5) / 15) * 15) : ''}`;
+// 每一段的出發時刻（seq 索引 → HH:MM），給大眾運輸查班次用
+function legDepartures(di){
+  const day = state.days[di], seq = seqOf(di), out = []; let clock = day.start || '09:00';
+  seq.forEach((s, i) => { clock = addMin(clock, +s.stay || 0); out[i] = clock; if (i < seq.length - 1) { const c = legCache.get(legKey(s, seq[i + 1], legMode(s), clock)); if (c && !c.err) clock = addMin(clock, Math.round(c.sec / 60)); } });
+  return out;
+}
+const VEH = { BUS:'🚌', SUBWAY:'🚇', METRO_RAIL:'🚇', RAIL:'🚆', HEAVY_RAIL:'🚆', COMMUTER_TRAIN:'🚆', HIGH_SPEED_TRAIN:'🚄', LONG_DISTANCE_TRAIN:'🚆', MONORAIL:'🚝', TRAM:'🚋', LIGHT_RAIL:'🚋', FERRY:'⛴️', CABLE_CAR:'🚠', GONDOLA_LIFT:'🚠', FUNICULAR:'🚞', TROLLEYBUS:'🚎', SHARE_TAXI:'🚐', OTHER:'🚌' };
+// 把 Google 的大眾運輸步驟整理成好讀的列表
+function transitSteps(leg){
+  return leg.steps.map(st => {
+    if (st.travel_mode === 'TRANSIT' && st.transit) {
+      const t = st.transit, line = t.line || {}, v = (line.vehicle && line.vehicle.type) || 'OTHER';
+      return { kind:'ride', icon:VEH[v] || '🚌', line:line.short_name || line.name || '', name:line.short_name && line.name ? line.name : '', from:t.departure_stop && t.departure_stop.name, to:t.arrival_stop && t.arrival_stop.name, dep:t.departure_time && t.departure_time.text, arr:t.arrival_time && t.arrival_time.text, stops:t.num_stops, head:t.headsign || '', min:Math.round(st.duration.value / 60), color:line.color || '' };
+    }
+    return { kind:'walk', min:Math.round(st.duration.value / 60), m:st.distance.value };
+  }).filter(x => x.kind === 'ride' || x.min >= 1);
+}
 function fmtDur(sec){ const m = Math.round(sec / 60); return m < 60 ? `${m} 分` : `${Math.floor(m / 60)} 小時${m % 60 ? ' ' + (m % 60) + ' 分' : ''}`; }
 function fmtDist(m){ return m < 1000 ? `${m} 公尺` : `${(m / 1000).toFixed(1)} 公里`; }
 function addMin(hhmm, min){ const [h, m] = hhmm.split(':').map(Number); const t = h * 60 + m + min; return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; }
@@ -670,24 +700,27 @@ const pathOf = leg => leg.steps.flatMap(st => st.path).map(ll => ({ lat:ll.lat()
 async function routeDay(di){
   const seq = seqOf(di); if (seq.length < 2) return false;
   let changed = false;
+  const deps = legDepartures(di), dateStr = dayDate(di) || todayStr();
   const groups = []; // {mode, from, to} 索引範圍（含）
   for (let i = 0; i < seq.length - 1; i++) {
     const m = legMode(seq[i]), g = groups[groups.length - 1];
     if (g && g.mode === m && m !== 'TRANSIT') g.to = i + 1; else groups.push({ mode:m, from:i, to:i + 1 });
   }
   for (const g of groups) {
-    const pts = seq.slice(g.from, g.to + 1);
-    const missing = pts.slice(0, -1).some((p, i) => !legCache.has(legKey(p, pts[i + 1], g.mode)));
+    const pts = seq.slice(g.from, g.to + 1), dep = deps[g.from];
+    const missing = pts.slice(0, -1).some((p, i) => !legCache.has(legKey(p, pts[i + 1], g.mode, dep)));
     if (!missing) continue;
     changed = true;
     try {
-      const r = await dirService.route({ origin:pts[0], destination:pts[pts.length - 1], waypoints:pts.slice(1, -1).map(s => ({ location:s, stopover:true })), travelMode:g.mode, language:'zh-TW' });
-      r.routes[0].legs.forEach((leg, i) => legCache.set(legKey(pts[i], pts[i + 1], g.mode), { sec:leg.duration.value, m:leg.distance.value, path:pathOf(leg) }));
+      const req = { origin:pts[0], destination:pts[pts.length - 1], waypoints:pts.slice(1, -1).map(s => ({ location:s, stopover:true })), travelMode:g.mode, language:'zh-TW' };
+      if (g.mode === 'TRANSIT') { let when = new Date(`${dateStr}T${dep}:00`); if (when < Date.now()) when = new Date(Date.now() + 5 * 60000); req.transitOptions = { departureTime:when }; }
+      const r = await dirService.route(req);
+      r.routes[0].legs.forEach((leg, i) => legCache.set(legKey(pts[i], pts[i + 1], g.mode, dep), { sec:leg.duration.value, m:leg.distance.value, path:pathOf(leg), steps:g.mode === 'TRANSIT' ? transitSteps(leg) : undefined, dep:leg.departure_time && leg.departure_time.text, arr:leg.arrival_time && leg.arrival_time.text }));
     } catch(e) {
       console.warn('route fail', g.mode, e.code || e);
       // 整段一起查失敗（常見是其中一站到不了，例如不同島），退回逐段查，只讓真的到不了的那段顯示查不到
       for (let i = 0; i < pts.length - 1; i++) {
-        const k = legKey(pts[i], pts[i + 1], g.mode); if (legCache.has(k)) continue;
+        const k = legKey(pts[i], pts[i + 1], g.mode, dep); if (legCache.has(k)) continue;
         if (pts.length > 2) { try { const r = await dirService.route({ origin:pts[i], destination:pts[i + 1], travelMode:g.mode, language:'zh-TW' }); const leg = r.routes[0].legs[0]; legCache.set(k, { sec:leg.duration.value, m:leg.distance.value, path:pathOf(leg) }); continue; } catch(e2){} }
         legCache.set(k, { err:true });
       }
@@ -699,8 +732,9 @@ function drawRoutes(){
   lines.forEach(l => l.setMap(null)); lines = [];
   if (activeDay < 0) return;
   const seq = seqOf(activeDay), col = dayColor(activeDay);
+  const deps = legDepartures(activeDay);
   for (let i = 0; i < seq.length - 1; i++) {
-    const m = legMode(seq[i]), c = legCache.get(legKey(seq[i], seq[i + 1], m));
+    const m = legMode(seq[i]), c = legCache.get(legKey(seq[i], seq[i + 1], m, deps[i]));
     const dashed = m === 'TRANSIT' || !c || c.err;
     const path = c && c.path ? c.path : [{ lat:seq[i].lat, lng:seq[i].lng }, { lat:seq[i + 1].lat, lng:seq[i + 1].lng }];
     lines.push(new google.maps.Polyline({ map, path, strokeColor:col, strokeOpacity:dashed ? 0 : .85, strokeWeight:m === 'WALKING' ? 3 : 4,
@@ -718,7 +752,7 @@ function dayStats(di){
     rows.push({ type:'stop', s, i, n, arrive:clock });
     clock = addMin(clock, +s.stay || 0);
     if (i < seq.length - 1) {
-      const m = legMode(s), c = legCache.get(legKey(s, seq[i + 1], m));
+      const m = legMode(s), c = legCache.get(legKey(s, seq[i + 1], m, clock));
       if (c && !c.err) { drive += c.sec; dist += c.m; maxLeg = Math.max(maxLeg, c.sec); clock = addMin(clock, Math.round(c.sec / 60)); }
       else if (!c) pending = true;
       rows.push({ type:'leg', c, a:s, b:seq[i + 1], mode:m, custom:!!s.modeTo, insertIndex:(s.fixed === 'from') ? 0 : day.stops.findIndex(x => x.id === s.id) + 1 });
@@ -764,7 +798,7 @@ function render(){
   let anyPending = false;
   if (view === 'go') {
     renderGo(wrap);
-    if (map) Promise.all(state.days.map((_, di) => routeDay(di))).then(changed => { if (changed.some(Boolean)) requestAnimationFrame(render); });
+    if (map) { const before = legCache.size; Promise.all(state.days.map((_, di) => routeDay(di))).then(changed => { if (changed.some(Boolean) || legCache.size !== before) requestAnimationFrame(render); }).catch(() => requestAnimationFrame(render)); }
     rendering = false; if (pendingRender) { pendingRender = false; requestAnimationFrame(render); } return;
   }
 
@@ -849,7 +883,8 @@ function render(){
 
   if (map) {
     drawMarkers(); drawRoutes();
-    Promise.all(state.days.map((_, di) => routeDay(di))).then(changed => { if (changed.some(Boolean) || anyPending) requestAnimationFrame(render); });
+    const before = legCache.size;
+    Promise.all(state.days.map((_, di) => routeDay(di))).then(changed => { if (changed.some(Boolean) || anyPending || legCache.size !== before) requestAnimationFrame(render); }).catch(e => { console.error('route', e); requestAnimationFrame(render); });
   }
   rendering = false;
   if (pendingRender) { pendingRender = false; requestAnimationFrame(render); }
@@ -880,13 +915,29 @@ function legEl(day, di, r){
   });
   d.appendChild(sel);
   const txt = document.createElement('span');
-  txt.innerHTML = !r.c ? '計算中…' : r.c.err ? '查不到路線' : `<b>${fmtDur(r.c.sec)}</b> · ${fmtDist(r.c.m)}`;
+  txt.innerHTML = !r.c ? '計算中…' : r.c.err ? (r.mode === 'TRANSIT' ? `此地區 Google 未開放大眾運輸資料 <a href="${gmapsLegUrl(r.a, r.b, 'transit')}" target="_blank" rel="noopener" class="tr-link">在 Google Maps 查搭法 ↗</a>` : '查不到路線') : `<b>${fmtDur(r.c.sec)}</b> · ${fmtDist(r.c.m)}`;
   d.appendChild(txt);
+  if (r.c && r.c.steps && r.c.steps.length) { const wrap = document.createElement('div'); wrap.className = 'leg-wrap'; wrap.appendChild(d); wrap.appendChild(transitEl(r.c)); return wrap; }
   const ins = document.createElement('button'); ins.className = 'ins' + (inserting && inserting.di === di && inserting.index === r.insertIndex ? ' on' : ''); ins.textContent = '＋'; ins.title = '在這兩站之間插入一站';
   ins.onclick = () => startInsert(di, r.insertIndex); d.appendChild(ins);
   return d;
 }
 
+// 大眾運輸搭法：🚶 5 分 → 🚌 120 名護西空港線 北谷 → 那霸BT（14:05→14:50，12 站）→ 🚶 3 分
+function transitEl(c){
+  const box = document.createElement('div'); box.className = 'transit';
+  c.steps.forEach(st => {
+    const row = document.createElement('div'); row.className = 'tr-step ' + st.kind;
+    if (st.kind === 'walk') row.innerHTML = `<span class="tr-ic">🚶</span><span>走 ${st.min} 分${st.m >= 100 ? '（' + fmtDist(st.m) + '）' : ''}</span>`;
+    else {
+      row.innerHTML = `<span class="tr-ic">${st.icon}</span><div class="tr-body"><div><b class="tr-line" style="${st.color ? 'background:' + st.color + ';color:#fff' : ''}"></b> <span class="tr-name"></span></div><div class="tr-detail"></div></div>`;
+      row.querySelector('.tr-line').textContent = st.line || '搭乘'; row.querySelector('.tr-name').textContent = st.name || (st.head ? '往 ' + st.head : '');
+      row.querySelector('.tr-detail').textContent = `${st.from || ''}${st.dep ? ' ' + st.dep : ''} → ${st.to || ''}${st.arr ? ' ' + st.arr : ''}${st.stops ? ' · ' + st.stops + ' 站' : ''} · ${st.min} 分`;
+    }
+    box.appendChild(row);
+  });
+  return box;
+}
 function stopEl(day, di, r){
   const s = r.s, fixed = !!s.fixed, inPool = di < 0;
   const el = document.createElement('div'); el.className = 'stop' + (fixed ? ' fixed' : '') + (replacing && replacing.id === s.id ? ' replacing' : ''); el.dataset.id = s.id;
@@ -1220,7 +1271,7 @@ function renderGo(wrap){
     const tl = el.querySelector('.tl');
     if (!st.seq.length) tl.innerHTML = '<div class="empty" style="grid-column:1/-1">這天沒有行程</div>';
     st.rows.forEach(r => {
-      if (r.type === 'leg') { const l = document.createElement('div'); l.className = 'lg'; l.textContent = !r.c ? `${MODES[r.mode]} …` : r.c.err ? `${MODES[r.mode]} 查不到` : `${MODES[r.mode]} ${fmtDur(r.c.sec)} · ${fmtDist(r.c.m)}`; tl.appendChild(l); return; }
+      if (r.type === 'leg') { const l = document.createElement('div'); l.className = 'lg'; if (r.c && r.c.err && r.mode === 'TRANSIT') l.innerHTML = `🚌 此地區未開放大眾運輸資料 <a href="${gmapsLegUrl(r.a, r.b, 'transit')}" target="_blank" rel="noopener" class="tr-link">在 Google Maps 查搭法 ↗</a>`; else l.textContent = !r.c ? `${MODES[r.mode]} …` : r.c.err ? `${MODES[r.mode]} 查不到` : `${MODES[r.mode]} ${fmtDur(r.c.sec)} · ${fmtDist(r.c.m)}`; if (r.c && r.c.steps && r.c.steps.length) l.appendChild(transitEl(r.c)); tl.appendChild(l); return; }
       const s = r.s, exps = state.expenses.filter(e => e.stopId === s.id);
       const t = document.createElement('div'); t.className = 't'; t.textContent = r.arrive; tl.appendChild(t);
       const p = document.createElement('div'); p.className = 'p tap'; p.innerHTML = '<b></b><small></small><div class="go-exps"></div><span class="chev">›</span>';
@@ -1366,6 +1417,7 @@ const gmMode = m => ({ DRIVING:'driving', TRANSIT:'transit', WALKING:'walking' }
 function gmapsUrl(seq){ const p = x => `${x.lat},${x.lng}`; return `https://www.google.com/maps/dir/?api=1&origin=${p(seq[0])}&destination=${p(seq[seq.length - 1])}&waypoints=${seq.slice(1, -1).map(p).join('|')}&travelmode=${gmMode()}`; }
 // 導航：不給 origin，Google Maps 會用目前位置
 function placeUrl(s){ return s.pid ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name)}&query_place_id=${s.pid}` : `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`; }
+function gmapsLegUrl(a, b, mode){ return `https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a.lng}&destination=${b.lat},${b.lng}&travelmode=${mode}`; }
 function navUrl(s, mode){ return `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}${s.pid ? '&destination_place_id=' + s.pid : ''}&travelmode=${gmMode(mode)}`; }
 
 /* ============================================================ 一鍵排順 */
