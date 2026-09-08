@@ -278,6 +278,8 @@
   .tr-line{display:inline-block;font-weight:700;padding:0 6px;border-radius:5px;background:#e8f0fe;color:var(--accent);font-size:12px}
   .tr-name{color:var(--muted)}
   .tr-link{color:var(--accent);text-decoration:none;margin-left:4px;white-space:nowrap}
+  .tr-toggle{margin-left:6px;padding:2px 8px;font-size:11.5px;border:1px solid #d4e3fb;border-radius:999px;background:#f3f7fd;color:var(--accent);white-space:nowrap;max-width:46%;overflow:hidden;text-overflow:ellipsis}
+  .tr-toggle.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .tr-detail{color:var(--muted);font-size:11.5px;margin-top:1px}
   .lg .transit{margin:4px 0 0 0;border-left:0;padding:4px 0 0}
 
@@ -511,7 +513,8 @@ const META_KEYS = ['title','mode','startDate','members','currency','rate','rateD
 const roomId = (new URLSearchParams(location.search).get('room') || '').replace(/[^A-Za-z0-9]/g, '') || null;
 // activeDay === -1 代表「口袋名單」
 let activeDay = 0, view = 'map', showAll = false, replacing = null, inserting = null, hotelFor = null, poolOpen = true;
-let nearbyFor = null;  // {id, items, loading} 附近推薦（只存在畫面，不進資料）
+let nearbyFor = null;
+const openLegs = new Set();  // 展開中的大眾運輸搭法（只在畫面）  // {id, items, loading} 附近推薦（只存在畫面，不進資料）
 function normalize(s){ s.pool ||= []; s.members ||= []; s.currency ||= 'JPY'; s.expenses ||= []; s.done ||= {}; if (s.rate === undefined) s.rate = null; return s; }
 const listOf = di => di < 0 ? state.pool : state.days[di].stops;
 const targetLabel = di => di < 0 ? '口袋名單' : dayLabel(di);
@@ -917,7 +920,16 @@ function legEl(day, di, r){
   const txt = document.createElement('span');
   txt.innerHTML = !r.c ? '計算中…' : r.c.err ? (r.mode === 'TRANSIT' ? `此地區 Google 未開放大眾運輸資料 <a href="${gmapsLegUrl(r.a, r.b, 'transit')}" target="_blank" rel="noopener" class="tr-link">在 Google Maps 查搭法 ↗</a>` : '查不到路線') : `<b>${fmtDur(r.c.sec)}</b> · ${fmtDist(r.c.m)}`;
   d.appendChild(txt);
-  if (r.c && r.c.steps && r.c.steps.length) { const wrap = document.createElement('div'); wrap.className = 'leg-wrap'; wrap.appendChild(d); wrap.appendChild(transitEl(r.c)); return wrap; }
+  if (r.c && r.c.steps && r.c.steps.length) {
+    const key = legKey(r.a, r.b, r.mode) + '|' + di, open = openLegs.has(key);
+    const rides = r.c.steps.filter(x => x.kind === 'ride');
+    const sum = document.createElement('button'); sum.className = 'tr-toggle' + (open ? ' on' : '');
+    sum.textContent = (rides.length ? rides.map(x => x.icon + (x.line || '')).join(' → ') : '🚶 步行') + (open ? ' ▴' : ' ▾');
+    sum.title = '看搭法'; sum.onclick = () => { if (open) openLegs.delete(key); else openLegs.add(key); render(); };
+    d.insertBefore(sum, d.querySelector('.ins'));
+    if (!open) return d;
+    const wrap = document.createElement('div'); wrap.className = 'leg-wrap'; wrap.appendChild(d); wrap.appendChild(transitEl(r.c)); return wrap;
+  }
   const ins = document.createElement('button'); ins.className = 'ins' + (inserting && inserting.di === di && inserting.index === r.insertIndex ? ' on' : ''); ins.textContent = '＋'; ins.title = '在這兩站之間插入一站';
   ins.onclick = () => startInsert(di, r.insertIndex); d.appendChild(ins);
   return d;
@@ -1271,7 +1283,7 @@ function renderGo(wrap){
     const tl = el.querySelector('.tl');
     if (!st.seq.length) tl.innerHTML = '<div class="empty" style="grid-column:1/-1">這天沒有行程</div>';
     st.rows.forEach(r => {
-      if (r.type === 'leg') { const l = document.createElement('div'); l.className = 'lg'; if (r.c && r.c.err && r.mode === 'TRANSIT') l.innerHTML = `🚌 此地區未開放大眾運輸資料 <a href="${gmapsLegUrl(r.a, r.b, 'transit')}" target="_blank" rel="noopener" class="tr-link">在 Google Maps 查搭法 ↗</a>`; else l.textContent = !r.c ? `${MODES[r.mode]} …` : r.c.err ? `${MODES[r.mode]} 查不到` : `${MODES[r.mode]} ${fmtDur(r.c.sec)} · ${fmtDist(r.c.m)}`; if (r.c && r.c.steps && r.c.steps.length) l.appendChild(transitEl(r.c)); tl.appendChild(l); return; }
+      if (r.type === 'leg') { const l = document.createElement('div'); l.className = 'lg'; if (r.c && r.c.err && r.mode === 'TRANSIT') l.innerHTML = `🚌 此地區未開放大眾運輸資料 <a href="${gmapsLegUrl(r.a, r.b, 'transit')}" target="_blank" rel="noopener" class="tr-link">在 Google Maps 查搭法 ↗</a>`; else l.textContent = !r.c ? `${MODES[r.mode]} …` : r.c.err ? `${MODES[r.mode]} 查不到` : `${MODES[r.mode]} ${fmtDur(r.c.sec)} · ${fmtDist(r.c.m)}`; if (r.c && r.c.steps && r.c.steps.length) { const key = legKey(r.a, r.b, r.mode) + '|go' + di, open = openLegs.has(key); const rides = r.c.steps.filter(x => x.kind === 'ride'); const b = document.createElement('button'); b.className = 'tr-toggle' + (open ? ' on' : ''); b.textContent = (rides.length ? rides.map(x => x.icon + (x.line || '')).join(' → ') : '🚶 步行') + (open ? ' ▴' : ' ▾'); b.onclick = () => { if (open) openLegs.delete(key); else openLegs.add(key); render(); }; l.appendChild(b); if (open) l.appendChild(transitEl(r.c)); } tl.appendChild(l); return; }
       const s = r.s, exps = state.expenses.filter(e => e.stopId === s.id);
       const t = document.createElement('div'); t.className = 't'; t.textContent = r.arrive; tl.appendChild(t);
       const p = document.createElement('div'); p.className = 'p tap'; p.innerHTML = '<b></b><small></small><div class="go-exps"></div><span class="chev">›</span>';
