@@ -1262,14 +1262,29 @@ async function exportPdf(){
 }
 
 // 把一個 DOM 區塊畫成多頁 A4：只在 breakSel 元素的邊界切，避免切到一半；scale 3 + PNG 提升清晰度
+const PDF_VER = 'p4';
+// 從 cutCss 往上找第一個整列近乎同色的位置（列與列之間一定有這種空白），最多找到 minCss
+function findBlankRow(canvas, SCALE, cutCss, minCss){
+  const ctx = canvas.getContext('2d', { willReadFrequently:true }), w = canvas.width;
+  const isBlank = yPx => { const d = ctx.getImageData(0, yPx, w, 1).data; const r0 = d[0], g0 = d[1], b0 = d[2]; for (let i = 4; i < d.length; i += 16) { if (Math.abs(d[i] - r0) > 12 || Math.abs(d[i + 1] - g0) > 12 || Math.abs(d[i + 2] - b0) > 12) return false; } return true; };
+  const start = Math.floor(cutCss * SCALE) - 1, stop = Math.max(0, Math.floor(minCss * SCALE));
+  for (let yPx = start; yPx > stop; yPx--) {
+    if (isBlank(yPx) && isBlank(yPx - 1) && isBlank(yPx - 2)) return (yPx - 1) / SCALE;  // 連續 3 列空白才算列縫
+  }
+  return cutCss;
+}
 async function domToPdf(box, filename, breakSel){
   const W = box.offsetWidth, SCALE = 3;
   const top = box.getBoundingClientRect().top;
   const edges = [...box.querySelectorAll(breakSel)].map(el => { const r = el.getBoundingClientRect(); return { a:r.top - top, b:r.bottom - top }; });
-  const canvas = await html2canvas(box, { scale:SCALE, useCORS:true, backgroundColor:'#fff', windowWidth:W });
+  const domH = box.getBoundingClientRect().height;
+  const canvas = await html2canvas(box, { scale:SCALE, useCORS:true, backgroundColor:'#fff', windowWidth:W, windowHeight:Math.ceil(domH), width:W, height:Math.ceil(domH), scrollX:0, scrollY:0 });
   const { jsPDF } = window.jspdf, pdf = new jsPDF({ unit:'pt', format:'a4', compress:true });
   const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight(), pageCss = W * ph / pw;  // 一頁高度（CSS px）
-  const totalCss = canvas.height / SCALE; let y = 0, first = true;
+  const totalCss = canvas.height / SCALE;
+  // html2canvas 畫出來的高度若和 DOM 不同（字型、換行差異），把量到的列邊界等比例校正
+  const k = totalCss / domH; if (Math.abs(k - 1) > 0.001) edges.forEach(e => { e.a *= k; e.b *= k; });
+  let y = 0, first = true;
   while (y < totalCss - 1) {
     let cut = Math.min(y + pageCss, totalCss);
     if (cut < totalCss) {  // 找最靠近頁底、且不切到任何元素的位置
@@ -1277,10 +1292,13 @@ async function domToPdf(box, filename, breakSel){
       const crossing = edges.filter(e => e.a < cut && e.b > cut && (e.b - e.a) < pageCss * 0.5 && e.a > y + 4);
       if (crossing.length) { const c = Math.max(...crossing.map(e => e.a)); if (c > y + pageCss * 0.3) cut = c; }
     }
+    // 保險：用畫好的圖檢查切點那一列是不是「空白列」（整列同色），不是就往上找最近的空白列；不依賴 DOM 量測
+    if (cut < totalCss) cut = findBlankRow(canvas, SCALE, cut, y + pageCss * 0.3);
     const hCss = cut - y, sl = document.createElement('canvas'); sl.width = canvas.width; sl.height = Math.round(hCss * SCALE);
     sl.getContext('2d').drawImage(canvas, 0, Math.round(y * SCALE), canvas.width, sl.height, 0, 0, canvas.width, sl.height);
     if (!first) pdf.addPage(); first = false;
     pdf.addImage(sl.toDataURL('image/png'), 'PNG', 0, 0, pw, hCss * pw / W, undefined, 'FAST');
+    pdf.setFontSize(7); pdf.setTextColor(170); pdf.text(`${pdf.internal.getNumberOfPages()}  ·  ${PDF_VER}`, pw - 24, ph - 10, { align:'right' });
     y = cut;
   }
   pdf.save(filename);
