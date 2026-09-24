@@ -208,6 +208,21 @@
   .tx{font-size:15px;padding:8px 10px;background:#eef8f0;border-radius:8px;margin-bottom:6px}
   .settle-tb td small{display:block;font-size:11px}
   .det{margin-top:10px;border-top:1px solid var(--line)}
+  .det-scroll{overflow-x:auto;margin:8px -12px 0;padding:0 12px}
+  .det-tb{border-collapse:collapse;font-size:12.5px;min-width:100%;white-space:nowrap}
+  .det-tb th{text-align:right;font-weight:600;color:var(--muted);font-size:11.5px;padding:8px 8px 6px;border-bottom:1px solid var(--line)}
+  .det-tb th.l,.det-tb td.l{text-align:left;white-space:normal;min-width:110px;max-width:170px}
+  .det-tb td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+  .det-tb td.l small{display:block;color:var(--muted);font-size:11px;font-weight:400}
+  .det-tb td.z{color:#c9c7c1}
+  .det-tb td.payer{background:#fff8e6;font-weight:700}
+  .det-tb td.payer i{font-style:normal;font-size:10px;color:#8a5a00;margin-left:3px;font-weight:400}
+  .det-tb td.sum{font-weight:600;color:var(--muted)}
+  .det-day-row td{text-align:left;font-size:11.5px;font-weight:700;color:var(--muted);padding:10px 8px 3px;border-bottom:0;background:#faf9f7}
+  .det-row{cursor:pointer}
+  .det-row:hover td{background:#f3f7fd}
+  .det-total td{font-weight:700;border-top:2px solid var(--ink);border-bottom:0}
+  .det-total td small{display:block;font-weight:400;font-size:11px;color:var(--muted)}
   .det-day{font-size:12px;font-weight:700;color:var(--muted);padding:10px 0 4px}
   .det-row{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:7px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:6px}
   .det-row:hover{background:#faf9f7}
@@ -1284,10 +1299,13 @@ async function exportExpensePdf(d){
       </table>
       <div style="font-weight:700;margin:16px 0 6px">怎麼還最省事</div>
       ${d.tx.length ? d.tx.map(t => `<div style="padding:8px 10px;background:#eef8f0;border-radius:8px;margin-bottom:6px;font-size:14px"><b>${t.from}</b> → <b>${t.to}</b> ${fmtMoney(t.v)}${rateOn ? ' <small style=\"color:#666\">(' + twd(t.v) + ')</small>' : ''}</div>`).join('') : '<div style="color:#666">大家剛好打平</div>'}
-      <div style="font-weight:700;margin:18px 0 6px">明細</div>
-      <table style="width:100%;border-collapse:collapse"><tr><th style="${th}">日期</th><th style="${th}">項目</th><th style="${th}">誰付</th><th style="${th}">怎麼分</th><th style="${th};text-align:right">金額</th></tr>
-        ${Object.keys(d.byDay).sort((a, b) => a - b).map(di => d.byDay[di].map((e, i) => { const v = toBase(e); return `<tr><td style="${td};white-space:nowrap;color:#666">${i === 0 ? dayLabel(+di) : ''}</td><td style="${td}"><b>${e.title || d.stopName(e) || '（未命名）'}</b>${e.title && d.stopName(e) ? '<br><small style=\"color:#888\">' + d.stopName(e) + '</small>' : ''}${e.note ? '<br><small style=\"color:#888\">' + e.note + '</small>' : ''}</td><td style="${td}">${e.paidBy}</td><td style="${td};color:#555;font-size:12px">${d.splitText(e)}</td><td style="${td};text-align:right;white-space:nowrap">${fmtMoney(e.amount, e.cur)}${v !== null && e.cur !== state.currency ? '<br><small style=\"color:#888\">≈ ' + fmtMoney(v) + '</small>' : ''}${v !== null && rateOn ? '<br><small style=\"color:#888\">' + twd(v) + '</small>' : ''}</td></tr>`; }).join('')).join('')}
-      </table>`;
+      <div style="font-weight:700;margin:18px 0 6px">明細（每人每筆分攤）</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th style="${th}">項目</th>${d.names.map(m => `<th style="${th};text-align:right">${m}</th>`).join('')}<th style="${th};text-align:right">合計</th></tr>
+        ${Object.keys(d.byDay).sort((a, b) => a - b).map(di => `<tr><td colspan="${d.names.length + 2}" style="padding:10px 8px 3px;font-weight:700;color:#666;font-size:11px">${dayLabel(+di)}</td></tr>` + d.byDay[di].map(e => `<tr><td style="${td}"><b>${e.title || d.stopName(e) || '（未命名）'}</b>${e.title && d.stopName(e) ? '<br><small style=\"color:#888\">' + d.stopName(e) + '</small>' : ''}${e.note ? '<br><small style=\"color:#888\">' + e.note + '</small>' : ''}</td>${d.names.map(m => { const a = d.shareOf(e, m), py = e.paidBy === m; return `<td style="${td};text-align:right;white-space:nowrap;${py ? 'background:#fff8e6;font-weight:700' : ''}${a ? '' : 'color:#bbb'}">${a ? fmtMoney(a, e.cur) : '–'}${py ? ' <small style=\"color:#8a5a00;font-weight:400\">付</small>' : ''}</td>`; }).join('')}<td style="${td};text-align:right;white-space:nowrap;font-weight:600">${fmtMoney(e.amount, e.cur)}</td></tr>`).join('')).join('')}
+        <tr><td style="${td};font-weight:700;border-top:2px solid #1d1d1b">該分攤合計</td>${d.names.map(m => `<td style="${td};text-align:right;font-weight:700;border-top:2px solid #1d1d1b">${fmtMoney(d.owed[m] || 0)}${rateOn ? '<br><small style=\"font-weight:400;color:#888\">' + twd(d.owed[m] || 0) + '</small>' : ''}</td>`).join('')}<td style="${td};text-align:right;font-weight:700;border-top:2px solid #1d1d1b">${fmtMoney(d.total)}</td></tr>
+        <tr><td style="${td};font-weight:700">實際付了</td>${d.names.map(m => `<td style="${td};text-align:right;font-weight:700">${fmtMoney(d.paid[m] || 0)}${rateOn ? '<br><small style=\"font-weight:400;color:#888\">' + twd(d.paid[m] || 0) + '</small>' : ''}</td>`).join('')}<td></td></tr>
+      </table>
+      <div style="font-size:11px;color:#888;margin-top:6px">格子是那個人在該筆應分攤的金額，黃底標「付」的是付錢的人。台幣記的帳以原幣顯示，合計列已換算成主要幣別。</div>`;
     document.body.appendChild(box);
     const canvas = await html2canvas(box, { scale:2, backgroundColor:'#fff', windowWidth:W }); box.remove();
     const { jsPDF } = window.jspdf, pdf = new jsPDF({ unit:'pt', format:'a4' });
@@ -1371,14 +1389,18 @@ function settlementEl(){
   const detailOpen = el._detailOpen = settlementEl.detailOpen;
   const byDay = {}; exps.forEach(e => (byDay[e.di] ||= []).push(e));
   const stopName = e => { if (!e.stopId) return ''; for (const d of state.days) { const st = d.stops.find(x => x.id === e.stopId); if (st) return st.name; } return ''; };
+  const shareOf = (e, m) => e.shares ? (e.shares[m] || 0) : (e.split.includes(m) ? e.amount / e.split.length : 0);
   const splitText = e => e.shares ? Object.entries(e.shares).map(([m, a]) => `${m} ${fmtMoney(a, e.cur)}`).join('、') : (e.split.length === members.length ? '全員平分' : e.split.join('、') + ' 平分');
-  const detailHtml = Object.keys(byDay).sort((a, b) => a - b).map(di => `
-      <div class="det-day">${dayLabel(+di)}</div>
-      ${byDay[di].map(e => { const v = toBase(e); return `<div class="det-row" data-id="${e.id}">
-        <div class="det-main"><b>${e.title || stopName(e) || '（未命名）'}</b>${e.title && stopName(e) ? `<small> · ${stopName(e)}</small>` : ''}${e.note ? `<small> · ${e.note}</small>` : ''}</div>
-        <div class="det-who">${e.paidBy} 付 · ${splitText(e)}</div>
-        <div class="det-amt">${fmtMoney(e.amount, e.cur)}${v !== null && e.cur !== state.currency ? `<small> ≈ ${fmtMoney(v)}</small>` : ''}${v !== null && state.rate && state.currency !== 'TWD' ? `<small> · NT$${Math.round(v * state.rate).toLocaleString()}</small>` : ''}</div>
-      </div>`; }).join('')}`).join('');
+  const cell = (e, m) => { const a = shareOf(e, m); if (!a) return '<td class="z">–</td>'; const isPayer = e.paidBy === m; return `<td class="${isPayer ? 'payer' : ''}" title="${isPayer ? '這筆是 ' + m + ' 付的' : ''}">${fmtMoney(a, e.cur)}${isPayer ? '<i>付</i>' : ''}</td>`; };
+  const detailHtml = `<div class="det-scroll"><table class="det-tb">
+      <tr><th class="l">項目</th>${names.map(m => `<th>${m}</th>`).join('')}<th>合計</th></tr>
+      ${Object.keys(byDay).sort((a, b) => a - b).map(di => `
+        <tr class="det-day-row"><td colspan="${names.length + 2}">${dayLabel(+di)}</td></tr>
+        ${byDay[di].map(e => `<tr class="det-row" data-id="${e.id}"><td class="l"><b>${e.title || stopName(e) || '（未命名）'}</b>${e.title && stopName(e) ? `<small>${stopName(e)}</small>` : ''}${e.note ? `<small>${e.note}</small>` : ''}</td>${names.map(m => cell(e, m)).join('')}<td class="sum">${fmtMoney(e.amount, e.cur)}</td></tr>`).join('')}`).join('')}
+      <tr class="det-total"><td class="l">該分攤合計</td>${names.map(m => `<td>${both(owed[m] || 0)}</td>`).join('')}<td class="sum">${both(total)}</td></tr>
+      <tr class="det-total"><td class="l">實際付了</td>${names.map(m => `<td>${both(paid[m] || 0)}</td>`).join('')}<td></td></tr>
+    </table></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">格子是那個人在該筆應分攤的金額，標「付」的是付錢的人。台幣記的帳以原幣顯示，合計列已換算。</div>`;
   el.innerHTML = `
     <div class="day-head" style="cursor:default"><span class="day-name">💰 結算</span><span style="font-size:12px;color:var(--muted)">共 ${exps.length} 筆 · ${fmtMoney(total)}${twd(total)}</span></div>
     <div class="settle-body">
@@ -1395,7 +1417,7 @@ function settlementEl(){
       <div class="det" ${detailOpen ? '' : 'hidden'}>${detailHtml}</div>
     </div>`;
   el.querySelector('#detToggle').onclick = () => { settlementEl.detailOpen = !settlementEl.detailOpen; render(); };
-  el.querySelector('#detPdf').onclick = () => exportExpensePdf({ names, paid, owed, tx, total, exps, byDay, stopName, splitText });
+  el.querySelector('#detPdf').onclick = () => exportExpensePdf({ names, paid, owed, tx, total, exps, byDay, stopName, splitText, shareOf });
   el.querySelectorAll('.det-row').forEach(r => r.onclick = () => { const e = exps.find(x => x.id === r.dataset.id); if (e) openExpense(e); });
   return el;
 }
