@@ -1273,8 +1273,9 @@ async function domToPdf(box, filename, breakSel){
   while (y < totalCss - 1) {
     let cut = Math.min(y + pageCss, totalCss);
     if (cut < totalCss) {  // 找最靠近頁底、且不切到任何元素的位置
-      const crossing = edges.filter(e => e.a < cut && e.b > cut);
-      if (crossing.length) { const c = Math.min(...crossing.map(e => e.a)); if (c > y + pageCss * 0.35) cut = c; }
+      // 只看「會被切到、而且本身不超過半頁高」的元素，取其中最靠近頁底的上緣；大容器不算
+      const crossing = edges.filter(e => e.a < cut && e.b > cut && (e.b - e.a) < pageCss * 0.5 && e.a > y + 4);
+      if (crossing.length) { const c = Math.max(...crossing.map(e => e.a)); if (c > y + pageCss * 0.3) cut = c; }
     }
     const hCss = cut - y, sl = document.createElement('canvas'); sl.width = canvas.width; sl.height = Math.round(hCss * SCALE);
     sl.getContext('2d').drawImage(canvas, 0, Math.round(y * SCALE), canvas.width, sl.height, 0, 0, canvas.width, sl.height);
@@ -1311,7 +1312,7 @@ async function exportExpensePdf(d){
       </table>
       <div style="font-size:11px;color:#888;margin-top:6px">格子是那個人在該筆應分攤的金額，黃底標「付」的是付錢的人。台幣記的帳以原幣顯示，合計列已換算成主要幣別。</div>`;
     document.body.appendChild(box);
-    try { await domToPdf(box, `${state.title || '旅程'}-帳目.pdf`, 'tr, div'); } finally { box.remove(); }
+    try { await domToPdf(box, `${state.title || '旅程'}-帳目.pdf`, 'tr'); } finally { box.remove(); }
     toast('帳目 PDF 已產生');
   } catch(e) { console.error(e); toast('PDF 產生失敗：' + e.message); }
 }
