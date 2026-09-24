@@ -1271,7 +1271,7 @@ async function exportExpensePdf(d){
   toast('產生 PDF 中…');
   try {
     await Promise.all([loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'), loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')]);
-    const W = 794, rateOn = state.rate && state.currency !== 'TWD', twd = v => rateOn ? `NT$${Math.round(v * state.rate).toLocaleString()}` : '';
+    const W = 794, rateOn = state.rate && state.currency !== 'TWD', twd = v => rateOn ? fmtMoney(v * state.rate, 'TWD') : '';
     const box = document.createElement('div');
     box.style.cssText = `position:fixed;left:-10000px;top:0;width:${W}px;background:#fff;padding:32px 36px;font-family:${getComputedStyle(document.body).fontFamily};color:#1d1d1b;font-size:13px`;
     const td = 'padding:6px 8px;border-bottom:1px solid #e6e4df;vertical-align:top', th = 'text-align:left;padding:6px 8px;border-bottom:2px solid #1d1d1b;font-size:12px;color:#555';
@@ -1367,7 +1367,7 @@ function settlementEl(){
   const debt = bal.filter(x => x.b < -0.5).map(x => ({ ...x, b:-x.b })).sort((a, b) => b.b - a.b), cred = bal.filter(x => x.b > 0.5).sort((a, b) => b.b - a.b), tx = [];
   let i = 0, j = 0; while (i < debt.length && j < cred.length) { const v = Math.min(debt[i].b, cred[j].b); tx.push({ from:debt[i].m, to:cred[j].m, v }); debt[i].b -= v; cred[j].b -= v; if (debt[i].b < 0.5) i++; if (cred[j].b < 0.5) j++; }
   const twd = v => state.rate && state.currency !== 'TWD' ? ` <small>(NT$${Math.round(v * state.rate).toLocaleString()})</small>` : '';
-  const both = v => state.rate && state.currency !== 'TWD' ? `${fmtMoney(v)}<br><small style="color:var(--muted)">NT$${Math.round(v * state.rate).toLocaleString()}</small>` : fmtMoney(v);
+  const both = v => state.rate && state.currency !== 'TWD' ? `${fmtMoney(v)}<br><small style="color:var(--muted)">${fmtMoney(v * state.rate, 'TWD')}</small>` : fmtMoney(v);
   const detailOpen = el._detailOpen = settlementEl.detailOpen;
   const byDay = {}; exps.forEach(e => (byDay[e.di] ||= []).push(e));
   const stopName = e => { if (!e.stopId) return ''; for (const d of state.days) { const st = d.stops.find(x => x.id === e.stopId); if (st) return st.name; } return ''; };
