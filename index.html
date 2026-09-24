@@ -475,14 +475,15 @@
   </div>
   <div class="field"><label>誰付的</label><select id="ePaid" style="width:100%"></select></div>
   <div class="field"><label>怎麼分</label>
-    <span class="seg" style="margin-bottom:6px"><button type="button" id="eModeEq" class="on">勾選的人平分</button><button type="button" id="eModeEx">各自多少</button></span>
+    <span class="seg" style="margin-bottom:6px"><button type="button" id="eModeEq" class="on">勾選的人平分</button><button type="button" id="eModeEx">每人不同金額</button></span>
     <div class="opts" id="eSplit" style="flex-direction:row;flex-wrap:wrap;gap:12px;margin-top:4px"></div>
     <div id="eShares" hidden style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
     <div id="eShareInfo" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
   </div>
   <div class="field"><label>備註</label><input type="text" id="eNote" placeholder="選填"></div>
   <div class="row">
-    <button id="eDelete" style="color:var(--danger);margin-right:auto" hidden>刪除</button>
+    <button id="eMerge" hidden style="margin-right:auto">合併同名的其他筆</button>
+    <button id="eDelete" style="color:var(--danger)" hidden>刪除</button>
     <button id="eSave" class="primary">儲存</button>
     <button onclick="expDlg.close()">取消</button>
   </div>
@@ -1511,7 +1512,8 @@ function openExpense(e){
   $('#eSplit').innerHTML = state.members.map(m => `<label><input type="checkbox" value="${m}" ${!e.split || e.split.includes(m) ? 'checked' : ''}> ${m}</label>`).join('');
   $('#eShares').innerHTML = state.members.map(m => `<label style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="width:72px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m}</span><input type="text" inputmode="decimal" data-m="${m}" value="${e.shares && e.shares[m] ? e.shares[m] : ''}" placeholder="0" style="flex:1;font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:8px"></label>`).join('');
   setExpMode(e.shares ? 'exact' : 'equal'); updateShareInfo();
-  $('#eDelete').hidden = !expEditing; $('#eDlgTitle').textContent = expEditing ? '修改這筆' : (e.title ? `記一筆：${e.title}` : '記一筆');
+  $('#eDelete').hidden = !expEditing;
+  const sib = expEditing ? mergeCandidates(expEditing) : []; $('#eMerge').hidden = !sib.length; if (sib.length) $('#eMerge').textContent = `合併同名的另外 ${sib.length} 筆成一筆（每人不同金額）`; $('#eDlgTitle').textContent = expEditing ? '修改這筆' : (e.title ? `記一筆：${e.title}` : '記一筆');
   $('#expDlg').dataset.di = e.di ?? todayIndex(); $('#expDlg').dataset.stop = e.stopId || '';
   $('#expDlg').showModal(); $('#eAmount').focus();
 }
@@ -1531,6 +1533,21 @@ $('#eSave').addEventListener('click', () => {
   if (expEditing) { Object.assign(expEditing, rec); target = expEditing; }
   else { target = { id:uid(), di:+$('#expDlg').dataset.di, stopId:$('#expDlg').dataset.stop || null, ts:Date.now(), ...rec }; state.expenses.push(target); }
   pushExpense(target); save(); render(); $('#expDlg').close(); toast('已記帳');
+});
+// 同一天、同名稱、同付款人、同幣別的其他筆（通常是被拆成一人一筆的）
+function mergeCandidates(e){ return state.expenses.filter(x => x !== e && x.di === e.di && x.paidBy === e.paidBy && x.cur === e.cur && (x.title || '').trim() === (e.title || '').trim()); }
+$('#eMerge').addEventListener('click', async () => {
+  if (!expEditing) return; const sib = mergeCandidates(expEditing), all = [expEditing, ...sib];
+  const shares = {}; let amount = 0;
+  all.forEach(x => { amount += x.amount; if (x.shares) Object.entries(x.shares).forEach(([m, a]) => shares[m] = (shares[m] || 0) + a); else x.split.forEach(m => shares[m] = (shares[m] || 0) + x.amount / x.split.length); });
+  Object.keys(shares).forEach(m => shares[m] = Math.round(shares[m] * 100) / 100);
+  if (!await ask(`把 ${all.length} 筆「${expEditing.title}」合併成一筆 ${fmtMoney(amount, expEditing.cur)}，每人金額：
+${Object.entries(shares).map(([m, a]) => `${m} ${fmtMoney(a, expEditing.cur)}`).join('、')}
+
+其他 ${sib.length} 筆會被刪除。`, '合併', '合併')) return;
+  Object.assign(expEditing, { amount, split:Object.keys(shares), shares, note:[expEditing.note, ...sib.map(x => x.note)].filter(Boolean).join('；') });
+  sib.forEach(x => deleteExpense(x.id)); state.expenses = state.expenses.filter(x => !sib.includes(x));
+  pushExpense(expEditing); save(); render(); $('#expDlg').close(); toast('已合併成一筆');
 });
 $('#eDelete').addEventListener('click', async () => { if (expEditing && await ask('刪除這筆帳？', '刪除', '刪除', true)) { deleteExpense(expEditing.id); state.expenses = state.expenses.filter(x => x !== expEditing); save(); render(); $('#expDlg').close(); } });
 
