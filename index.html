@@ -1256,21 +1256,33 @@ async function exportPdf(){
     box.appendChild(h);
     document.querySelectorAll('#days .day').forEach(d => { const c = d.cloneNode(true); c.querySelectorAll('button,.chev,.today-tag,.go-top').forEach(x => x.remove()); c.style.cssText = 'box-shadow:none;border:1px solid #ccc;margin-bottom:12px;break-inside:avoid'; c.querySelectorAll('.tl .p.tap').forEach(x => x.style.paddingRight = '0'); box.appendChild(c); });
     document.body.appendChild(box);
-    const canvas = await html2canvas(box, { scale:2, useCORS:true, backgroundColor:'#fff', windowWidth:W });
-    box.remove();
-    const { jsPDF } = window.jspdf, pdf = new jsPDF({ unit:'pt', format:'a4' });
-    const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
-    const imgW = pw, pageHpx = Math.floor(canvas.width * ph / pw);
-    let y = 0, first = true;
-    while (y < canvas.height) {
-      const slice = document.createElement('canvas'); slice.width = canvas.width; slice.height = Math.min(pageHpx, canvas.height - y);
-      slice.getContext('2d').drawImage(canvas, 0, y, canvas.width, slice.height, 0, 0, canvas.width, slice.height);
-      if (!first) pdf.addPage(); first = false;
-      pdf.addImage(slice.toDataURL('image/jpeg', .92), 'JPEG', 0, 0, imgW, slice.height * pw / canvas.width);
-      y += pageHpx;
-    }
-    pdf.save(`${state.title || '旅程'}.pdf`); toast('PDF 已產生');
+    try { await domToPdf(box, `${state.title || '旅程'}.pdf`, '.tl .p, .tl .t, .tl .lg, .day-head, .day'); } finally { box.remove(); }
+    toast('PDF 已產生');
   } catch(e) { console.error(e); toast('PDF 產生失敗：' + e.message); }
+}
+
+// 把一個 DOM 區塊畫成多頁 A4：只在 breakSel 元素的邊界切，避免切到一半；scale 3 + PNG 提升清晰度
+async function domToPdf(box, filename, breakSel){
+  const W = box.offsetWidth, SCALE = 3;
+  const top = box.getBoundingClientRect().top;
+  const edges = [...box.querySelectorAll(breakSel)].map(el => { const r = el.getBoundingClientRect(); return { a:r.top - top, b:r.bottom - top }; });
+  const canvas = await html2canvas(box, { scale:SCALE, useCORS:true, backgroundColor:'#fff', windowWidth:W });
+  const { jsPDF } = window.jspdf, pdf = new jsPDF({ unit:'pt', format:'a4', compress:true });
+  const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight(), pageCss = W * ph / pw;  // 一頁高度（CSS px）
+  const totalCss = canvas.height / SCALE; let y = 0, first = true;
+  while (y < totalCss - 1) {
+    let cut = Math.min(y + pageCss, totalCss);
+    if (cut < totalCss) {  // 找最靠近頁底、且不切到任何元素的位置
+      const crossing = edges.filter(e => e.a < cut && e.b > cut);
+      if (crossing.length) { const c = Math.min(...crossing.map(e => e.a)); if (c > y + pageCss * 0.35) cut = c; }
+    }
+    const hCss = cut - y, sl = document.createElement('canvas'); sl.width = canvas.width; sl.height = Math.round(hCss * SCALE);
+    sl.getContext('2d').drawImage(canvas, 0, Math.round(y * SCALE), canvas.width, sl.height, 0, 0, canvas.width, sl.height);
+    if (!first) pdf.addPage(); first = false;
+    pdf.addImage(sl.toDataURL('image/png'), 'PNG', 0, 0, pw, hCss * pw / W, undefined, 'FAST');
+    y = cut;
+  }
+  pdf.save(filename);
 }
 
 /* ============================================================ 帳目 PDF */
@@ -1299,12 +1311,8 @@ async function exportExpensePdf(d){
       </table>
       <div style="font-size:11px;color:#888;margin-top:6px">格子是那個人在該筆應分攤的金額，黃底標「付」的是付錢的人。台幣記的帳以原幣顯示，合計列已換算成主要幣別。</div>`;
     document.body.appendChild(box);
-    const canvas = await html2canvas(box, { scale:2, backgroundColor:'#fff', windowWidth:W }); box.remove();
-    const { jsPDF } = window.jspdf, pdf = new jsPDF({ unit:'pt', format:'a4' });
-    const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight(), pageHpx = Math.floor(canvas.width * ph / pw);
-    let y = 0, first = true;
-    while (y < canvas.height) { const sl = document.createElement('canvas'); sl.width = canvas.width; sl.height = Math.min(pageHpx, canvas.height - y); sl.getContext('2d').drawImage(canvas, 0, y, canvas.width, sl.height, 0, 0, canvas.width, sl.height); if (!first) pdf.addPage(); first = false; pdf.addImage(sl.toDataURL('image/jpeg', .92), 'JPEG', 0, 0, pw, sl.height * pw / canvas.width); y += pageHpx; }
-    pdf.save(`${state.title || '旅程'}-帳目.pdf`); toast('帳目 PDF 已產生');
+    try { await domToPdf(box, `${state.title || '旅程'}-帳目.pdf`, 'tr, div'); } finally { box.remove(); }
+    toast('帳目 PDF 已產生');
   } catch(e) { console.error(e); toast('PDF 產生失敗：' + e.message); }
 }
 
