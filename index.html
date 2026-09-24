@@ -1262,7 +1262,7 @@ async function exportPdf(){
 }
 
 // 把一個 DOM 區塊畫成多頁 A4：只在 breakSel 元素的邊界切，避免切到一半；scale 3 + PNG 提升清晰度
-const PDF_VER = 'p4';
+const PDF_VER = 'p5';
 // 從 cutCss 往上找第一個整列近乎同色的位置（列與列之間一定有這種空白），最多找到 minCss
 function findBlankRow(canvas, SCALE, cutCss, minCss){
   const ctx = canvas.getContext('2d', { willReadFrequently:true }), w = canvas.width;
@@ -1325,8 +1325,8 @@ async function exportExpensePdf(d){
       <div style="font-weight:700;margin:18px 0 6px">明細（每人每筆分攤）</div>
       <table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th style="${th}">項目</th>${d.names.map(m => `<th style="${th};text-align:right">${m}</th>`).join('')}<th style="${th};text-align:right">合計</th></tr>
         ${Object.keys(d.byDay).sort((a, b) => a - b).map(di => `<tr><td colspan="${d.names.length + 2}" style="padding:10px 8px 3px;font-weight:700;color:#666;font-size:11px">${dayLabel(+di)}</td></tr>` + d.byDay[di].map(e => `<tr><td style="${td}"><b>${e.title || d.stopName(e) || '（未命名）'}</b>${e.title && d.stopName(e) ? '<br><small style=\"color:#888\">' + d.stopName(e) + '</small>' : ''}${e.note ? '<br><small style=\"color:#888\">' + e.note + '</small>' : ''}</td>${d.names.map(m => { const a = d.shareOf(e, m), py = e.paidBy === m; return `<td style="${td};text-align:right;white-space:nowrap;${py ? 'background:#fff8e6;font-weight:700' : ''}${a ? '' : 'color:#bbb'}">${a ? fmtMoney(a, e.cur) : '–'}${py ? ' <small style=\"color:#8a5a00;font-weight:400\">付</small>' : ''}</td>`; }).join('')}<td style="${td};text-align:right;white-space:nowrap;font-weight:600">${fmtMoney(e.amount, e.cur)}</td></tr>`).join('')).join('')}
-        <tr><td style="${td};font-weight:700;border-top:2px solid #1d1d1b">該分攤合計</td>${d.names.map(m => `<td style="${td};text-align:right;font-weight:700;border-top:2px solid #1d1d1b">${fmtMoney(d.owed[m] || 0)}${rateOn ? '<br><small style=\"font-weight:400;color:#888\">' + twd(d.owed[m] || 0) + '</small>' : ''}</td>`).join('')}<td style="${td};text-align:right;font-weight:700;border-top:2px solid #1d1d1b">${fmtMoney(d.total)}</td></tr>
-        <tr><td style="${td};font-weight:700">實際付了</td>${d.names.map(m => `<td style="${td};text-align:right;font-weight:700">${fmtMoney(d.paid[m] || 0)}${rateOn ? '<br><small style=\"font-weight:400;color:#888\">' + twd(d.paid[m] || 0) + '</small>' : ''}</td>`).join('')}<td></td></tr>
+        <tr><td style="${td};font-weight:700;border-top:2px solid #1d1d1b">該分攤合計</td>${d.names.map(m => `<td style="${td};text-align:right;font-weight:700;border-top:2px solid #1d1d1b">${rateOn ? twd(d.owed[m] || 0) + '<br><small style=\"font-weight:400;color:#888\">' + fmtMoney(d.owed[m] || 0) + '</small>' : fmtMoney(d.owed[m] || 0)}</td>`).join('')}<td style="${td};text-align:right;font-weight:700;border-top:2px solid #1d1d1b">${rateOn ? twd(d.total) + '<br><small style=\"font-weight:400;color:#888\">' + fmtMoney(d.total) + '</small>' : fmtMoney(d.total)}</td></tr>
+        <tr><td style="${td};font-weight:700">實際付了</td>${d.names.map(m => `<td style="${td};text-align:right;font-weight:700">${rateOn ? twd(d.paid[m] || 0) + '<br><small style=\"font-weight:400;color:#888\">' + fmtMoney(d.paid[m] || 0) + '</small>' : fmtMoney(d.paid[m] || 0)}</td>`).join('')}<td></td></tr>
       </table>
       <div style="font-size:11px;color:#888;margin-top:6px">格子是那個人在該筆應分攤的金額，黃底標「付」的是付錢的人。台幣記的帳以原幣顯示，合計列已換算成主要幣別。</div>`;
     document.body.appendChild(box);
@@ -1404,6 +1404,7 @@ function settlementEl(){
   const debt = bal.filter(x => x.b < -0.5).map(x => ({ ...x, b:-x.b })).sort((a, b) => b.b - a.b), cred = bal.filter(x => x.b > 0.5).sort((a, b) => b.b - a.b), tx = [];
   let i = 0, j = 0; while (i < debt.length && j < cred.length) { const v = Math.min(debt[i].b, cred[j].b); tx.push({ from:debt[i].m, to:cred[j].m, v }); debt[i].b -= v; cred[j].b -= v; if (debt[i].b < 0.5) i++; if (cred[j].b < 0.5) j++; }
   const twd = v => state.rate && state.currency !== 'TWD' ? ` <small>(NT$${Math.round(v * state.rate).toLocaleString()})</small>` : '';
+  const twdFirst = v => state.rate && state.currency !== 'TWD' ? `${fmtMoney(v * state.rate, 'TWD')}<br><small style="color:var(--muted)">${fmtMoney(v)}</small>` : fmtMoney(v);
   const both = v => state.rate && state.currency !== 'TWD' ? `${fmtMoney(v)}<br><small style="color:var(--muted)">${fmtMoney(v * state.rate, 'TWD')}</small>` : fmtMoney(v);
   const detailOpen = el._detailOpen = settlementEl.detailOpen;
   const byDay = {}; exps.forEach(e => (byDay[e.di] ||= []).push(e));
@@ -1416,8 +1417,8 @@ function settlementEl(){
       ${Object.keys(byDay).sort((a, b) => a - b).map(di => `
         <tr class="det-day-row"><td colspan="${names.length + 2}">${dayLabel(+di)}</td></tr>
         ${byDay[di].map(e => `<tr class="det-row" data-id="${e.id}"><td class="l"><b>${e.title || stopName(e) || '（未命名）'}</b>${e.title && stopName(e) ? `<small>${stopName(e)}</small>` : ''}${e.note ? `<small>${e.note}</small>` : ''}</td>${names.map(m => cell(e, m)).join('')}<td class="sum">${fmtMoney(e.amount, e.cur)}</td></tr>`).join('')}`).join('')}
-      <tr class="det-total"><td class="l">該分攤合計</td>${names.map(m => `<td>${both(owed[m] || 0)}</td>`).join('')}<td class="sum">${both(total)}</td></tr>
-      <tr class="det-total"><td class="l">實際付了</td>${names.map(m => `<td>${both(paid[m] || 0)}</td>`).join('')}<td></td></tr>
+      <tr class="det-total"><td class="l">該分攤合計</td>${names.map(m => `<td>${twdFirst(owed[m] || 0)}</td>`).join('')}<td class="sum">${twdFirst(total)}</td></tr>
+      <tr class="det-total"><td class="l">實際付了</td>${names.map(m => `<td>${twdFirst(paid[m] || 0)}</td>`).join('')}<td></td></tr>
     </table></div>
     <div style="font-size:11px;color:var(--muted);margin-top:6px">格子是那個人在該筆應分攤的金額，標「付」的是付錢的人。台幣記的帳以原幣顯示，合計列已換算。</div>`;
   el.innerHTML = `
