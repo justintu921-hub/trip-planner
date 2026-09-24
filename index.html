@@ -457,7 +457,12 @@
     <div class="field" style="width:100px"><label>幣別</label><select id="eCur" style="width:100%"></select></div>
   </div>
   <div class="field"><label>誰付的</label><select id="ePaid" style="width:100%"></select></div>
-  <div class="field"><label>分給誰（平分）</label><div class="opts" id="eSplit" style="flex-direction:row;flex-wrap:wrap;gap:12px;margin-top:4px"></div></div>
+  <div class="field"><label>怎麼分</label>
+    <span class="seg" style="margin-bottom:6px"><button type="button" id="eModeEq" class="on">勾選的人平分</button><button type="button" id="eModeEx">各自多少</button></span>
+    <div class="opts" id="eSplit" style="flex-direction:row;flex-wrap:wrap;gap:12px;margin-top:4px"></div>
+    <div id="eShares" hidden style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
+    <div id="eShareInfo" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+  </div>
   <div class="field"><label>備註</label><input type="text" id="eNote" placeholder="選填"></div>
   <div class="row">
     <button id="eDelete" style="color:var(--danger);margin-right:auto" hidden>刪除</button>
@@ -1270,7 +1275,7 @@ function renderGo(wrap){
   top.querySelector('#goExpense').onclick = () => openExpense({ di:todayIndex() });
   top.querySelector('#goPdf').onclick = exportPdf;
 
-  const expLine = (e, s) => { const d = document.createElement('div'); d.className = 'go-exp'; d.innerHTML = `<span></span><span class="who"></span>`; d.querySelector('span').textContent = `${fmtMoney(e.amount, e.cur)}${e.title && (!s || e.title !== s.name) ? ' ' + e.title : ''}`; d.querySelector('.who').textContent = `${e.paidBy} 付 · ${e.split.length === members.length ? '全員分' : e.split.join('、')}`; d.onclick = ev => { ev.stopPropagation(); openExpense(e); }; return d; };
+  const expLine = (e, s) => { const d = document.createElement('div'); d.className = 'go-exp'; d.innerHTML = `<span></span><span class="who"></span>`; d.querySelector('span').textContent = `${fmtMoney(e.amount, e.cur)}${e.title && (!s || e.title !== s.name) ? ' ' + e.title : ''}`; d.querySelector('.who').textContent = `${e.paidBy} 付 · ${e.shares ? Object.entries(e.shares).map(([m, a]) => m + ' ' + fmtMoney(a, e.cur)).join('、') : e.split.length === members.length ? '全員分' : e.split.join('、') + ' 平分'}`; d.onclick = ev => { ev.stopPropagation(); openExpense(e); }; return d; };
 
   state.days.forEach((day, di) => {
     const st = dayStats(di), isToday = dayDate(di) === today, dayExp = state.expenses.filter(e => e.di === di);
@@ -1312,7 +1317,7 @@ function settlementEl(){
   const members = state.members, exps = state.expenses;
   if (!exps.length) { el.innerHTML = '<div class="day-head" style="cursor:default"><span class="day-name">💰 結算</span></div><div class="empty">還沒有記帳</div>'; return el; }
   let unconverted = 0, total = 0; const paid = {}, owed = {}; members.forEach(m => { paid[m] = 0; owed[m] = 0; });
-  exps.forEach(e => { const v = toBase(e); if (v === null) { unconverted++; return; } total += v; paid[e.paidBy] = (paid[e.paidBy] || 0) + v; const each = v / (e.split.length || 1); e.split.forEach(m => owed[m] = (owed[m] || 0) + each); });
+  exps.forEach(e => { const v = toBase(e); if (v === null) { unconverted++; return; } total += v; paid[e.paidBy] = (paid[e.paidBy] || 0) + v; if (e.shares) { const k = v / e.amount; Object.entries(e.shares).forEach(([m, a]) => owed[m] = (owed[m] || 0) + a * k); } else { const each = v / (e.split.length || 1); e.split.forEach(m => owed[m] = (owed[m] || 0) + each); } });
   const names = [...new Set([...members, ...Object.keys(paid), ...Object.keys(owed)])];
   const bal = names.map(m => ({ m, b:(paid[m] || 0) - (owed[m] || 0) }));
   // 最少轉帳次數：欠最多的還給被欠最多的
@@ -1377,7 +1382,21 @@ $('#noteSave').addEventListener('click', () => { if (noting) { noting.note = $('
 let renaming = null;
 function renameDlg(s){ renaming = s; $('#nName').value = s.name; $('#renameDlg').showModal(); $('#nName').select(); }
 $('#nSave').addEventListener('click', () => { const v = $('#nName').value.trim(); if (renaming && v) { renaming.name = v; save(); render(); } $('#renameDlg').close(); });
-let expEditing = null;
+let expEditing = null, expMode = 'equal';
+function setExpMode(m){ expMode = m; $('#eModeEq').classList.toggle('on', m === 'equal'); $('#eModeEx').classList.toggle('on', m === 'exact'); $('#eSplit').hidden = m !== 'equal'; $('#eShares').hidden = m !== 'exact'; updateShareInfo(); }
+function updateShareInfo(){
+  const amount = parseFloat($('#eAmount').value) || 0, cur = $('#eCur').value || state.currency;
+  if (expMode === 'equal') { const n = document.querySelectorAll('#eSplit input:checked').length; $('#eShareInfo').textContent = amount && n ? `${n} 人平分，每人 ${fmtMoney(amount / n, cur)}` : ''; return; }
+  let sum = 0, blank = []; document.querySelectorAll('#eShares input').forEach(i => { const v = parseFloat(i.value); if (v > 0) sum += v; else blank.push(i); });
+  const left = amount - sum;
+  $('#eShareInfo').textContent = !amount ? '先填總金額' : Math.abs(left) < 0.5 ? '✓ 剛好分完' : left > 0 ? `還剩 ${fmtMoney(left, cur)} 沒分${blank.length ? `（點「補上」平均給沒填的 ${blank.length} 人）` : ''}` : `多分了 ${fmtMoney(-left, cur)}`;
+  let fill = $('#eFill'); if (!fill) { fill = document.createElement('button'); fill.id = 'eFill'; fill.type = 'button'; fill.textContent = '補上'; fill.style.cssText = 'margin-left:8px;padding:2px 8px;font-size:12px'; $('#eShareInfo').after(fill); fill.onclick = () => { const a = parseFloat($('#eAmount').value) || 0; let sm = 0, bl = []; document.querySelectorAll('#eShares input').forEach(i => { const v = parseFloat(i.value); if (v > 0) sm += v; else bl.push(i); }); if (!bl.length || a - sm <= 0) return; const each = Math.round((a - sm) / bl.length * 100) / 100; bl.forEach((i, k) => i.value = k === bl.length - 1 ? Math.round(((a - sm) - each * (bl.length - 1)) * 100) / 100 : each); updateShareInfo(); }; }
+  fill.hidden = !(left > 0.5 && blank.length);
+}
+$('#eModeEq').addEventListener('click', () => setExpMode('equal'));
+$('#eModeEx').addEventListener('click', () => setExpMode('exact'));
+$('#eAmount').addEventListener('input', updateShareInfo); $('#eCur').addEventListener('change', updateShareInfo);
+$('#eSplit').addEventListener('change', updateShareInfo); $('#eShares').addEventListener('input', updateShareInfo);
 function openExpense(e){
   if (!state.members.length) { editMembers(); if (!state.members.length) return; }
   expEditing = e.id ? e : null;
@@ -1385,14 +1404,24 @@ function openExpense(e){
   const curs = [...new Set([state.currency, 'TWD', e.cur].filter(Boolean))]; $('#eCur').innerHTML = curs.map(c => `<option value="${c}" ${c === (e.cur || state.currency) ? 'selected' : ''}>${c}</option>`).join('');
   $('#ePaid').innerHTML = state.members.map(m => `<option ${m === (e.paidBy || (state.members.includes(who()) ? who() : state.members[0])) ? 'selected' : ''}>${m}</option>`).join('');
   $('#eSplit').innerHTML = state.members.map(m => `<label><input type="checkbox" value="${m}" ${!e.split || e.split.includes(m) ? 'checked' : ''}> ${m}</label>`).join('');
+  $('#eShares').innerHTML = state.members.map(m => `<label style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="width:72px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m}</span><input type="text" inputmode="decimal" data-m="${m}" value="${e.shares && e.shares[m] ? e.shares[m] : ''}" placeholder="0" style="flex:1;font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:8px"></label>`).join('');
+  setExpMode(e.shares ? 'exact' : 'equal'); updateShareInfo();
   $('#eDelete').hidden = !expEditing; $('#eDlgTitle').textContent = expEditing ? '修改這筆' : (e.title ? `記一筆：${e.title}` : '記一筆');
   $('#expDlg').dataset.di = e.di ?? todayIndex(); $('#expDlg').dataset.stop = e.stopId || '';
   $('#expDlg').showModal(); $('#eAmount').focus();
 }
 $('#eSave').addEventListener('click', () => {
   const amount = parseFloat($('#eAmount').value); if (!(amount > 0)) return toast('金額要大於 0');
-  const split = [...document.querySelectorAll('#eSplit input:checked')].map(i => i.value); if (!split.length) return toast('至少要分給一個人');
-  const rec = { title:$('#eTitle').value.trim(), amount, cur:$('#eCur').value, paidBy:$('#ePaid').value, split, note:$('#eNote').value.trim() };
+  let split, shares = null;
+  if (expMode === 'exact') {
+    shares = {}; document.querySelectorAll('#eShares input').forEach(i => { const v = parseFloat(i.value); if (v > 0) shares[i.dataset.m] = v; });
+    split = Object.keys(shares); if (!split.length) return toast('至少填一個人的金額');
+    const sum = split.reduce((a, m) => a + shares[m], 0);
+    if (Math.abs(sum - amount) > 0.5) return toast(`每人加起來是 ${fmtMoney(sum, $('#eCur').value)}，跟總額 ${fmtMoney(amount, $('#eCur').value)} 不一樣`);
+  } else {
+    split = [...document.querySelectorAll('#eSplit input:checked')].map(i => i.value); if (!split.length) return toast('至少要分給一個人');
+  }
+  const rec = { title:$('#eTitle').value.trim(), amount, cur:$('#eCur').value, paidBy:$('#ePaid').value, split, shares, note:$('#eNote').value.trim() };
   let target;
   if (expEditing) { Object.assign(expEditing, rec); target = expEditing; }
   else { target = { id:uid(), di:+$('#expDlg').dataset.di, stopId:$('#expDlg').dataset.stop || null, ts:Date.now(), ...rec }; state.expenses.push(target); }
